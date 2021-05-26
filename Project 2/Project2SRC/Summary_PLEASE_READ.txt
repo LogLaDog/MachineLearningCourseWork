@@ -1,0 +1,7 @@
+Logan Ladd and Asher Worley Program 2 CSCI447
+
+This project required a LOT more code than the first program.
+
+To assist in your navigation of the code for grading, the folder 'primary classes' containes the important classes that contain the KNN algorithms (KNNC and KNNR), the reduction methods (CMeansKNN, CMedoids, CondensedKNN, EditedKNN, ClusterHandler), the evaluators for MSE, ME, and Accuracy (ClassificationEvaluator, RegressionEvaluator), Euclidean for distance metrics, Matrix to implement a similarity matrix, and VDM for another distance calculation between two categorical variables. Note that test is empty, simply because it was the driver, and reduction processes with KNN algorithm execution was not run concurrently. 
+
+'Helper Classes' contains Example and Set classes similar to program 1 to handle their respective entities, FileHandler handles the input file, KNNHandler is an interface class to easier utilize the KNNC and KNNR classes. Metric was being used for a similar interface but was not used for the most part.

@@ -1,0 +1,75 @@
+Note: This output is not raw/all ran at the same time, please see the Summary_PLEASE_READ file attached with this source code. The driver class program was reworked constantly for classification and regression, and implementing the different reduction methods. Results are simply appended here.
+
+Glass Accuracy  -10%/N/+10%
+KNN - 76.3/68.2/70.4
+ENN - 75.4/68.3/72.4
+CNN - 40.7/41.2/ 42.7
+KMeans - 7.9/7.9/7.9
+K Medoids - 67.9/67.9/67.9
+
+Glass MSE -10%/N/+10%
+KNN - 10.4/8.7/11.6
+ENN - 11.4/9.7/12.4
+CNN - 672.3/1173.3/868.4
+KMeans -  7733.3/7733.3/7733.3
+K Medoids - 14.6/12.4/17.0
+
+Image Segmentation Accuracy  -10%/N/+10%
+KNN - 83.3/83.8/81.9
+ENN - 84.1/83.1/81.5
+CNN - 54.8/50.0/45.2
+KMeans - 14.3/14.3/14.3
+K Medoids - 80.5/82.4/79.5
+
+Image Segmentation MSE  -10%/N/+10%
+KNN - 2.1/2.1/2.5
+ENN - 2.2/2.7/2.9 
+CNN - 6.1/7.8/9.5
+KMeans - 56.4/56.4/56.4
+K Medoids - 2.6/2.1/2.9
+
+Vote Accuracy  -10%/N/+10%
+KNN - 30.9/30.8/30.9
+ENN - 31.2/32.3./33.3
+CNN - 29.9/30.5/30.8
+KMeans - 0.1/0.1/0.1
+K Medoids - 0.1/0.1/0.1
+
+Vote MSE -10%/N/+10%
+KNN - 245.3/262.5/299.8
+ENN - 325.3/335.6/355.9
+CNN - 148.9/202.3/225.9/
+KMeans - 6334.5/6334.5/6334.5
+K Medoids - 6334.5/6334.5/6334.5
+
+Forest Fires ME -10%/N/+10%
+KNN - 4239.7/4238.9/4238.2
+KMeans - 4235.7/4236.3/4238.2
+K Medoids - 4238.7/4248.27/4238.9
+
+Forest Fires MSE -10%/N/+10%
+KNN - -12.7/-12.7/-12.7
+KMeans - -12.7/-12.7/-12.7
+K Medoids - -12.7/-12.6/-12.6
+
+Abalone ME -10%/N/+10%
+KNN - -14.3/-14.2/-14.3
+KMeans - -14.3/-14.2/-14.3
+K Medoids - -14.3/-14.2/-14.3
+
+Abalone MSE -10%/N/+10%
+KNN - 202.4/218.1/231.1
+KMeans - 7056.9/7056.9/7056.9
+K Medoids -  7056.9/7056.9/7056.9
+
+Machine ME -10%/N/+10% 
+KNN - -0.5/-0.5/-0.5
+KMeans -  -0.5/-0.5/-0.5
+K Medoids -  -0.5/-0.5/-0.5
+
+Machine MSE -10%/N/+10%
+KNN - 2.1/2.1/2.1
+KMeans - 2.1/2.1/2.1
+K Medoids - 2.1/2.1/2.1
+
+ 

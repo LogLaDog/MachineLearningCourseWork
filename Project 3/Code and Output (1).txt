@@ -1,0 +1,1215 @@
+Logan Ladd and Asher Worley's Java Code for Project 3
+First is the Java Code itself in descending order of importance
+Then the processor Python Program
+Finally Raw Output at the bottom of the file
+
+Classes are seperated by --------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+MLP.java------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project3;
+import java.util.ArrayList;
+public class MLP implements NeuralNet {
+    private static final double initBound = 0.0001; //the abs val of the bounds on the starting weight in the output layer
+    private final double rate; //the learning rate fot eh NN is a tunable parameter that impactseach iteration of weight updates on the output layer.
+    private final double batchSize;
+    private final double CT; //the convergence threshold and the max iter determine the termination point during training, training the layer weights will terminate 
+    private final int MaxIter;       //when the grad updates are all weighted less thatn the CT multiplied by the current weights
+    private final double m; //momentum makes the network train faster by moving the grad step in the loss function toward the previous iteration's grad path.
+    private final SimMatrix[] matrix; //store the matrix
+    private Layer[] layer; //the array of layer holds the weights that create the network
+    private final int hiddenLayersCount;
+    private final int[] hiddenNodesCount;
+    
+    public Layer returnLayer(int ID) { //return layer
+        return this.layer[ID]; 
+    }
+    
+    public MLP(int _hiddenLayersCount, int[] _hiddenNodesCount, double _rate, 
+            double _batchSize, double _m, double _CT, 
+            int _MaxIter, SimMatrix[] _matrix) {
+        hiddenLayersCount = _hiddenLayersCount;
+        hiddenNodesCount = new int[hiddenLayersCount];
+        for (int i= 0; i < hiddenNodesCount.length; i++) { 
+            hiddenNodesCount[i] = _hiddenNodesCount[i]; 
+        }
+        
+        CT = _CT;
+        MaxIter = _MaxIter;
+        matrix = _matrix;
+        rate = _rate;
+        batchSize = _batchSize;
+        m = _m;
+        layer = new Layer[hiddenLayersCount + 1];
+        
+    }
+
+    @Override
+    public void train(Set set) { 
+        int dimensions = this.computeInputDim(set.returnExample(0)); //find dimensions
+        this.initLayers(set.returnClassesCount(), dimensions);
+        Backpropagator backprop = new Backpropagator(this); //create backprop to train
+        boolean conv = false;
+        int i = 0;
+        Matrix[] gradP = null;
+        while (i<MaxIter&&!conv) {
+            Set batch=set.returnRandomBatch(batchSize); //find a batch
+            Matrix[] grad = backprop.findGradient(batch); //get grad
+            for (int j=0; j<grad.length; j++) {  //multiply by learning rate
+                grad[j].MultiplyMatrix(rate); 
+            }
+            for (int j=0; j<layer.length; j++) { //apply grad
+                layer[j].add(grad[j]); 
+            }
+            if (m != 0.0 && gradP != null) {   // apply momentum if needed
+                for (int j=0; j<gradP.length; j++) { //multiply by mom rate
+                    gradP[j].MultiplyMatrix(m);
+                }
+                for (int j=0; j<grad.length; j++) { //apply momentum
+                    this.layer[j].add(gradP[j]);
+            }
+            }
+            gradP = grad; //update
+    }}
+    
+    @Override
+    public double[] test(Set testSet) {
+        ArrayList<Example> ex = testSet.returnExample(); // Init empty array
+        double[] pred = new double[ex.size()];
+        for (int i = 0; i < ex.size(); i++) { // Iterate through all ex
+            pred[i] = predict(ex.get(i));
+        }
+        return pred;
+    }
+
+    @Override
+    public double predict(Example ex) { //predict the treal value or class of example. done by inputting the example, feeding it forwar, and making a desicion form the output of the layer.
+        Vector result = generateLayerOutputs(ex)[layer.length]; //prop the example through the NN and check output
+        if (result.returnLength() == 1) {// check amount of node for the output layer to determine classification or regression
+            return result.get(0); //regression
+        } else {
+            return (double)result.returnMaxID(); //classification
+        }
+    }
+
+    public Vector[] generateLayerOutputs(Example ex) { //return layer outpuut
+        Vector[] result = new Vector[layer.length + 1];
+        result[0] = new Vector(ex, matrix);
+        for (int i=0; i<layer.length; i++) {
+            result[i].insertBias();
+            result[i+1]=layer[i].feedForward(result[i]);
+        }
+        return result;
+    }
+
+    public Vector[] generateLayerDerivaties() { //return layers derivative
+        Vector[] deriv = new Vector[layer.length];
+        for (int i = 0; i < layer.length; i++) {
+            deriv[i] = layer[i].returnDerivative();
+        }
+        return deriv;
+    }
+
+    public int[][] returnLayerDimensions() { //return layer dimension
+        int[][] dim = new int[layer.length][2];
+        for (int i=0; i<layer.length; i++) {
+            dim[i][0] = layer[i].returnNodesCount();
+            dim[i][1] = layer[i].returnInputsCount();
+        }
+        return dim;
+    }
+
+    private boolean convergenceChecker(Matrix[] grad, boolean check) { //has the NN converged?
+        for (int i=0; i<grad.length; i++) { 
+            Matrix weights = this.layer[i].returnWeights(); //get weights and grad
+            Matrix runningGradient = grad[i];
+            for(int row=0; row<weights.returnRowsCount(); row++) {
+                Vector gradientRow = runningGradient.returnRow(row);
+                Vector rowWeight = weights.returnRow(row);
+                for(int col=0; col<weights.returnColumnCount(); col++) {
+                    double tmp = Math.abs(gradientRow.get(col));
+                    double tmp2 = Math.abs(rowWeight.get(col));
+                    if( tmp > tmp2*CT) { //has the value past the threshold?
+                        if(check){}
+                        return false;
+                    }}}}
+        return true; //if you get to this point, the weights have converged
+    }
+
+
+    private void initLayers(int classesCount, int dimensions) { //initialize layers and populate with the correct weights
+        if (hiddenNodesCount.length==0) { 
+            if (classesCount==-1) { //regression
+                layer[layer.length-1] = new Layer(new Linear() {
+                    @Override
+                    public Vector returnDerivative() {
+                        throw new UnsupportedOperationException("Not supported yet.");
+                    }
+                }, 1, dimensions+1);
+            } else { //classification
+                layer[layer.length-1]=new Layer(new Logistic(), classesCount, dimensions+1);  // The layer consists of one node for each class with sigmoidal act function
+            }
+        }
+        else { 
+            layer[0]=new Layer(new Logistic(), hiddenNodesCount[0], dimensions+1); 
+            for (int i=1;i<layer.length-1; i++) {
+                layer[i] = new Layer(new Logistic(), hiddenNodesCount[i], layer[i-1].returnNodesCount()+1);
+          }
+            if (classesCount==-1) { // //create output layer for regression
+                layer[layer.length-1] = new Layer(new Linear() {
+                    @Override
+                    public Vector returnDerivative() {
+                        throw new UnsupportedOperationException("Not supported yet.");
+                    }
+                }, 1, layer[layer.length-2].returnNodesCount()+1); //contains one node for activation functrion
+            } else { //classification
+                layer[layer.length-1] = new Layer(new Logistic(), classesCount, layer[layer.length-2].returnNodesCount()+1);
+            }
+        }
+        for (int i=0; i<layer.length; i++) { //randomly init
+            layer[i].populateRandom(-initBound, initBound);
+        }
+    }
+    private int computeInputDim(Example temp) { //find dimensions of input layer
+        int dimensions = 0;
+        if (this.matrix.length==0) { 
+            dimensions = temp.returnAttributes().size(); 
+        }
+        else {
+            int tmp=0;
+            for (int i=0; i<temp.returnAttributes().size(); i++) {
+                if (tmp<this.matrix.length) {
+                    if (i==this.matrix[tmp].returnAttributeID()) { //test cat attr and add the correct number
+                        dimensions += this.matrix[tmp].returnOptionsCount();
+                        tmp++;
+                    }
+                    else { 
+                        dimensions++; 
+                    }
+                }
+                else { 
+                    dimensions++; 
+                }
+            }}
+        return dimensions;
+    }}
+	
+Backpropagator.java---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project3;
+public class Backpropagator { //class to implement the backpropagation algorithm
+    private final NeuralNet nw;// weights in network
+    private Matrix[] grad; //gradient for network
+
+    public Backpropagator(NeuralNet nw) { //init globals
+        this.nw = nw;
+        int[][] layerD = this.nw.returnLayerDimension();
+        this.grad = new Matrix[layerD.length]; //init gradient to right size
+        for (int i=0; i<this.grad.length; i++) { //init gradient values to 0
+            int rowsTotal = layerD[i][0];     
+            int columnsTotal = layerD[i][1];  
+            this.grad[i] = new Matrix(rowsTotal, columnsTotal);
+        }
+    }
+
+    private void updateGradient(Matrix weight, Vector diff, Vector in) { //update the gradient for the running weights
+        for (int i=0; i<weight.returnRowsCount(); i++) { //go through node
+            Vector row = weight.returnRow(i);
+            Vector newVec = new Vector(in.returnLength()); //find row update
+            for (int j = 0; j < in.returnLength(); j++) { 
+                double val = diff.get(i) * in.get(j);
+                newVec.set(j, val);
+            }
+            row.add(newVec); //add to the row
+        }
+    }
+    
+    public Matrix[] findGradient(Set batch) { //compute average gradient of a network compared to the batch
+        for (int i=0; i<this.grad.length; i++) { //clear grad
+            this.grad[i].clearMatrix();
+        } 
+        for (int i=0; i<batch.returnExamplesCount(); i++) { //update grad
+            Example ex = batch.returnExample(i);
+            double act = ex.returnValue(); //return output
+            
+            Vector[] result = this.nw.generateLayerResults(ex); //store layer output for example
+            Vector[] derivs = this.nw.generateLayerDerivatives(); //store deriv
+            int layer = derivs.length - 1;
+
+            Vector targetVector = new Vector(result[layer+1].returnLength()); //get correct output
+            if (targetVector.returnLength() == 1) {  //differentiate regression
+                targetVector.set(0, act); 
+            } 
+            else { 
+                int class_index = (int)act;
+                for (int j = 0; j < targetVector.returnLength(); j++) { //iterate targetVector vector
+                    if (j == class_index) { //set to 1 for correct class 
+                        targetVector.set(j, 1.0); 
+                    }      
+                    else { 
+                        targetVector.set(j, 0.0); 
+                    }                           
+                }
+            }
+            
+            Vector output = result[layer+1]; //get output
+            Vector deriv = derivs[layer]; // get deriv
+            Vector diff = new Vector(targetVector.returnLength()); //compute changes
+            for (int j = 0; j < diff.returnLength(); j++) {
+                double difference = output.get(j) - targetVector.get(j);
+                difference = deriv.get(j) * difference;
+                diff.set(j, difference); // add values to changes vector
+            }
+            this.updateGradient(this.grad[layer], diff, result[layer]); //update grad
+            this.backpropagate(layer-1, result, derivs, diff); //go back through remaining layers
+        }
+        for (int i = 0; i < this.grad.length; i++) { //average gradient
+            this.grad[i].DivideMatrix(batch.returnExamplesCount()); 
+        }
+        for (int i = 0; i < this.grad.length; i++) {  // multiply gradient by -1 for  loss function
+            this.grad[i].MultiplyMatrix(-1); 
+        }        
+        return this.grad;
+    }
+
+    private void backpropagate(int layer, Vector[] result, Vector[] derivs, Vector diffs) { //recursively propagate back through the neural network, updating the gradient for each weight in the array
+        if (layer>=0){ 
+            Matrix layerA = this.nw.returnLayer(layer).returnWeights();
+            Matrix layerB = this.nw.returnLayer(layer+1).returnWeights();
+            Vector deriv = derivs[layer];
+            Vector diff = new Vector(layerA.returnRowsCount()); //compute differences
+            for (int j=0; j<diff.returnLength(); j++) {
+                double difference = 0.0;
+                for (int k=0; k<diffs.returnLength(); k++) { //sum difference from next layer
+                    Vector row = layerB.returnRow(k);
+                    difference+=diffs.get(k)*row.get(j);
+                }
+                difference *= deriv.get(j);
+                diff.set(j, difference);
+            }
+            this.updateGradient(this.grad[layer], diff, result[layer]);//update grad
+            this.backpropagate(layer-1, result, derivs, diff); //recursion
+        }
+    }
+}
+
+Matrix.java-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project3;
+public class Matrix { //class to sotre and return a matrix made of vectors.
+    private Vector[] matrix; //store matrtix
+    private int columnCount; //store columns total
+
+    public Matrix(int num_rows, int columnCount){
+        this.matrix = new Vector[num_rows]; //init rows and columns
+        this.columnCount = columnCount;
+
+        for (int i = 0; i < num_rows; i++) { //start with 0's
+            this.matrix[i] = new Vector(columnCount); 
+        }
+    }
+    
+    public int returnColumnCount() { 
+        return this.columnCount; 
+    }
+    public int returnRowsCount() { 
+        return this.matrix.length; 
+    }
+    public Vector returnRow(int index) { 
+        return this.matrix[index]; 
+    }
+    
+    public void add(Matrix add) { //add matrices together and store the result in a new matrix
+        boolean tmp = true; //check that adding works
+        if (this.returnRowsCount() != add.returnRowsCount()) { 
+            tmp = false; 
+        }
+        if (this.returnColumnCount() != add.returnColumnCount()) { 
+            tmp = false; 
+        }
+
+        if (!tmp) { 
+            System.err.println("Cant add matrix"); 
+        }
+        else { //add matrices
+            for (int j=0; j<this.returnRowsCount(); j++) {
+                this.returnRow(j).add(add.returnRow(j)); //add rows
+            }
+        }
+    }
+
+    public void DivideMatrix(double divide) { //divide each matrix 
+        for (int i = 0; i < this.returnRowsCount(); i++) { 
+            this.returnRow(i).divideVectors(divide);
+        }
+    }
+
+    public void MultiplyMatrix(double mult) { //multiply matrix
+        for (int i = 0; i < this.returnRowsCount(); i++) { 
+            this.returnRow(i).multiplyVectors(mult);
+        }
+    }
+
+    public void clearMatrix() { //clear matrix
+        for (int i = 0; i < this.returnRowsCount(); i++) {
+            this.returnRow(i).clearVectors(); 
+        }
+    }
+
+    protected void populateRandom(double low, double high) { //populate with random values
+        for (int i = 0; i < this.returnRowsCount(); i++) {
+            this.returnRow(i).populateVector(low, high);
+        }
+    }
+
+    protected Vector multiplyMV(Vector vector) { //multiply a matrix and a vector and then return the result in a vector
+        if (vector.returnLength() != this.returnColumnCount()) { //check validity
+            System.err.println("Not Permitted");
+            return null;
+        }
+        else{
+            Vector result = new Vector(this.returnRowsCount()); //create result with ccorrect size
+            for (int j = 0; j < this.returnRowsCount(); j++) { //compute the dot result
+                double dProduct = this.returnRow(j).dotProduct(vector);
+                result.set(j, dProduct);
+            }
+            return result;
+        }
+    }
+}
+
+Vector.java--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project3;
+import java.util.ArrayList;
+import java.util.Random;
+public class Vector { //store a vector that can be manipulated by the nn
+    private double[] value;
+
+    public void set(int ID, double val) { 
+        this.value[ID] = val;
+    }
+    public double get(int ID) {
+        return this.value[ID];
+    }
+    public int returnLength() { 
+        return this.value.length;
+    } 
+    
+    public Vector(int len){ //create vector
+        this.value = new double[len];
+        for (int i = 0; i < len; i++) { this.set(i, 0.0); }
+    }
+    
+    public Vector(Example example, SimMatrix[] matrix){ //make vector from example
+        ArrayList<Double> attr = example.returnAttributes();
+        int size = attr.size();
+        for (int i=0; i<matrix.length; i++) {
+            size += matrix[i].returnOptionsCount()-1; //add the number of cat options to the array size
+        }
+        
+        this.value = new double[size];       
+        int tmp = 0;   //add attr to matrix
+        int tmp2 = 0;    
+        for (int i=0; i<this.value.length; i++) { 
+            if (tmp < matrix.length) {
+                if (tmp2==matrix[tmp].returnAttributeID()) { //check if categorical
+                    double val = attr.get(tmp2);
+                    tmp2++;
+                    int a = 0;
+                    for (a=0; a<matrix[tmp].returnOptionsCount(); a++) {
+                        if ((int)val == a) {  //test if attr value is current
+                            this.set(i + a, 1.0); 
+                        } 
+                        else{
+                            this.set(i + a, 0.0);
+                        }
+                    }
+                    i+=a-1;
+                    tmp++;
+                }
+                else { //add value
+                    this.set(i, attr.get(tmp2)); 
+                    tmp2++;
+                }
+            }
+            else { //add value
+                this.set(i, attr.get(tmp2)); 
+                tmp2++;
+            }
+        }
+    }
+
+    public void insertBias() { //insert 1 to vector to multiply the bias by 1
+        double[] copy = this.value.clone();
+        this.value = new double[this.returnLength()+1];
+        this.set(0,1.0);
+        for (int i=0; i<copy.length; i++) { //copy into new vector
+            this.set(i+1, copy[i]);
+        }
+    }
+
+    public void add(Vector add) { //add two vectors together
+        if (this.returnLength() != add.returnLength()){ System.err.println("Vectors have different dimensions"); }
+        else {
+            for (int i=0; i<this.returnLength(); i++) {
+                double val = this.get(i) + add.get(i); //find new value
+                this.set(i, val); //update
+            }
+        }
+    }
+    
+    protected void populateVector(double low, double high) { //populate vector with random values
+        Random rand = new Random();
+        for (int i = 0; i < this.returnLength(); i++) {
+            double val = rand.nextDouble();
+            val = low + (high - low) * val;
+            this.set(i, val);
+        }
+    }
+    
+    protected double dotProduct(Vector mult) { //compute the dot product between two vectors
+        if (this.value.length != mult.returnLength()) {
+            System.err.println("Vectors are not the same");
+            return Double.NaN;
+        }
+        else {
+            double product = 0.0;
+            for (int i = 0; i < this.returnLength(); i++) { product += this.get(i) * mult.get(i); }
+            return product; //return result
+        }
+    }
+
+    protected void multiplyVectors(double mult) { //multiply vectors
+        for (int i=0; i<this.returnLength(); i++) { 
+            this.set(i, mult * this.get(i));
+        }
+    }
+    
+    protected void divideVectors(double divide) { //divide vectors
+        for (int i=0; i<this.returnLength(); i++) { 
+            this.set(i, this.get(i) / divide); 
+        }
+    }
+    protected void clearVectors() { //clear vectors
+        for (int i=0; i<this.returnLength(); i++) { 
+            this.set(i,0.0); 
+        } 
+    }
+
+    public int returnMaxID() { //find max in vector
+        int max = 0;
+        for(int i = 0; i < value.length; i++) {
+            if(value[i] > value[max]) {
+                max = i;
+            }
+        }
+        return max;
+    }
+}
+
+Layer.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project3;
+
+public class Layer { //Class that represents a layer in the neural network, consists of a activation function and weight martix
+    private final Matrix weightMatrix; //store weights in a layer
+    private final ActivationFunction activationFunction;     // function used on the layer
+    private Vector derivative;     // derivative of each value in the finalOutput vector
+
+    public void add(Matrix to_add) {  //add matrix to the weight in working layer
+        this.weightMatrix.add(to_add); 
+    }
+    
+    public void populateRandom(double lower, double upper) { //method to randomly populate weights in a layer
+        this.weightMatrix.populateRandom(lower, upper); 
+    }
+
+    public int returnNodesCount(){ //getter method
+        return this.weightMatrix.returnRowsCount(); 
+    }
+    public int returnInputsCount(){ 
+        return this.weightMatrix.returnColumnCount(); 
+    }
+    public Matrix returnWeights() { 
+        return this.weightMatrix; 
+    }
+    
+    public Vector returnDerivative() { //method to get the vector that is the derivative
+        if (this.derivative == null) { System.err.println("Derivative has not been computed."); return null; }
+        else { return this.derivative; }
+    }
+    
+    public Layer(ActivationFunction activationFunction, int nodesCount, int inputCount) {
+        this.activationFunction = activationFunction;
+        this.weightMatrix = new Matrix(nodesCount, inputCount);
+        this.derivative = null;
+    }
+
+    public Vector feedForward(Vector input) { //feed input forward
+        Vector finalOutput = this.weightMatrix.multiplyMV(input);//matrix to vector multiplication
+        finalOutput = this.activationFunction.computeActivation(finalOutput);//compute activation
+        this.derivative = this.activationFunction.returnDerivative();//get derivative
+        return finalOutput;
+    }
+}
+
+Linear.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project3;
+public class Linear implements ActivationFunction {
+    private Vector derivative; //store Derivative of each value
+    
+    public Linear() { 
+        this.derivative = null; 
+    }
+    public Vector getDerivative() { //return method
+        return this.derivative; 
+    }
+    
+    @Override
+    public Vector computeActivation(Vector vector) { //compute the activation of each value in an output vector, used as a linear sum
+        Vector activation = new Vector(vector.returnLength());
+        for (int i = 0; i < activation.returnLength(); i++) {
+            activation.set(i, vector.get(i)); //dot product already compute linear sum
+        }
+        
+        this.derivative = new Vector(vector.returnLength()); //initialize and populate derivative
+        for (int i = 0; i < this.derivative.returnLength(); i++) {
+            this.derivative.set(i, 1.0); //activation is just the linear sum, thherefore the derivative value is simply 1
+        }
+        return activation; //return
+    }
+}
+
+Logistic.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project3;
+public class Logistic implements ActivationFunction {
+    private Vector derivative; //store each derivative of each value in a vector
+    public Logistic() { 
+        this.derivative = null; 
+    }
+    
+    @Override
+    public Vector returnDerivative() { //return the derivative Vector
+        return this.derivative; 
+    }
+    
+    @Override
+    public Vector computeActivation(Vector vector) { //compute the activation of each value in an output vector. The AF is the logistic function, activation is computed on the output of an entire layer.
+        Vector activation = new Vector(vector.returnLength());    // compute sigmoid of each value in vector
+        for (int i=0; i<activation.returnLength(); i++) {
+            double initial = vector.get(i); //get initial value
+            activation.set(i, this.logisticFunction(initial)); //compute logistic function
+        }
+        
+        this.derivative = new Vector(activation.returnLength());   // initialize and populate derivative
+        for (int i = 0; i < this.derivative.returnLength(); i++) {
+            double temp = activation.get(i);  // logistic function is applied
+            temp=temp*(1-temp); //compute Derivative
+            this.derivative.set(i, temp); //store
+        }
+        return activation; //return activation
+    }
+    
+    private double logisticFunction(double initial) { //compute logsitc function of a value
+        double exp = Math.exp(-1 * initial);
+        return 1 / (1 + exp);
+    }   
+}
+
+SimMatrix.java------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project3;
+///Class to utilize a similarity matrix, each matirx contains of an attribute and an array that stores probabilities.
+public class SimMatrix {
+    private int attributeID; //attribute id
+    private int options; //number of options
+    private int binsCount; // number of bins
+    private double[][] matrix; //actual matrix
+    private int ClassCount;
+
+    public int returnAttributeID(){
+        return this.attributeID; } // return methods
+
+    public int returnClassCount(){
+        return this.ClassCount; }
+
+    public int returnOptionsCount(){
+        return this.options; }
+
+    public double returnProbability(int option, int classification){
+        return this.matrix[option][classification];
+    }
+
+    public SimMatrix(int attributeID, int options, int classCount){
+        this.attributeID = attributeID;
+        this.options = options;
+        this.binsCount = classCount;
+
+        matrix = new double[this.options][this.binsCount];
+    }
+
+    public void addRow(int option, String line){ //Adds a row to the matrix, each row consisting of probabilites thats value appears in the nth class of line
+        String[] data = line.split(","); //create string array
+        for (int i=0; i<data.length; i++){ // insert values of array
+            matrix[option][i] = Double.parseDouble(data[i]);
+        }
+    }
+}
+
+Example.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project3;
+import java.util.ArrayList;
+//Class to create an example in dataset, basically reused from prgm1. Each example contains a val, subset, and attrIDibute
+public class Example {   
+    private final double val; //store type of class an example is in
+    private final int subsetID; //store which subset and example is for
+    private ArrayList<Double> attrID; //story values of attr for examples
+
+        
+    public double returnValue(){ //returner methods
+        return this.val; 
+    } 
+    public int returnSubsetID(){
+        return this.subsetID;
+    }
+    public ArrayList<Double> returnAttributes(){ 
+        return this.attrID;
+    }
+    
+    public Example(String line, int attrIDCount){
+        this.attrID = new ArrayList<Double>(attrIDCount); //initialize attr array
+        String[] data = line.split(",");
+        //split the input line into a string array
+        this.val = Double.parseDouble(data[0]); //populate class type and subsetID
+        this.subsetID = Integer.parseInt(data[1]);
+       
+        for (int i=0; i<attrIDCount; i++){ //populate attr with values.
+            this.attrID.add(Double.parseDouble(data[i+2])); }
+    }
+    
+    public Example(double val, ArrayList<Double> attrIDibutes){
+        this.attrID = attrIDibutes;
+        this.val = val;
+        this.subsetID = 0;
+    }
+}
+
+
+Set.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project3;
+import java.util.ArrayList;
+import java.util.Random;
+// Class that creates a set of examples from the datasets, basically reused from prgm1
+public class Set {
+    private final int attrCount;
+    private final int classCount;
+    private String[] classID;
+    private ArrayList<Example> EX = new ArrayList<Example>();
+    public Set(int attrCount, int classCount, String[] classID){
+        this.attrCount = attrCount;
+        this.classCount = classCount;
+        this.classID = classID;
+    }
+
+    public void addEX(Example ex){ //add example
+        this.EX.add(ex);
+    }
+    public void addEX(int index, Example ex){
+        this.EX.add(index, ex);
+    }
+    public void deleteEX(int index){ //delete examples
+        this.EX.remove(index);
+    }
+    public void deleteEX(Example ex){
+        this.EX.remove(ex);
+    }
+    public void replaceEX(int index, Example ex){  //replace EX
+        this.EX.set(index, ex);
+    }
+
+    public Set clone(){
+        // initialize new Set object
+        Set clone = new Set(this.attrCount, this.classCount, this.classID);
+
+        // add each example in this to clone
+        for (Example ex: EX){ clone.addEX(ex); }
+
+        return clone;
+    }
+
+    public Example returnExample(int index){ //return methods
+        return this.EX.get(index);
+    }
+    public int returnClassesCount(){
+        return this.classCount;
+    }
+    public int returnAttributesCount(){
+        return this.attrCount;
+    }
+    public int returnExamplesCount(){
+        return this.EX.size();
+    }
+    public String[] returnclassNames(){
+        return this.classID;
+    }
+
+    public void voidSet(){
+        this.EX.clear();
+    }
+
+    Object returnExampleE(int i) {
+        throw new UnsupportedOperationException("");
+    }
+
+    public Set(Set[] subset, int tmpx, boolean VS){
+        this.attrCount = subset[0].returnAttributesCount();
+        this.classCount = subset[0].returnClassesCount();
+        this.classID = subset[0].returnclassNames();
+        boolean indexCheck = false;
+        if (VS){
+            if (tmpx>=1&&tmpx<subset.length){
+                indexCheck = true;
+            } //subset[0] will not be used in 10-fold CV
+        }
+        else if (tmpx>=0&&tmpx<subset.length){
+            indexCheck = true;
+        }
+        if (indexCheck){
+            int i = 0; //index in subset
+            if (VS){ //ignore subset[0] if VS is required
+                i = 1;
+            }
+
+            for ( ; i < subset.length; i++){ //process subset
+                if (tmpx != i){
+                    Set tmp = subset[i];
+                    for (int j=0; j<tmp.returnExamplesCount(); j++){  //add example to subset
+                        this.addEX(tmp.returnExample(j));
+                    }
+                }}}}
+
+       public Set returnRandomBatch(double batchSize) {
+        Set copy = clone(); //clone for randomization
+        Set batch = new Set(returnAttributesCount(), returnClassesCount(), returnclassNames());
+        for(int i = 0; i < (int)(returnExamplesCount() * batchSize); i++) { //fill bacth
+            Random random = new Random();
+            int ID = random.nextInt(copy.returnExamplesCount()); //put random index
+            batch.addEX(copy.returnExample(ID));
+            copy.deleteEX(ID);
+        }
+        return batch;
+    }
+
+    
+    public Set[] returnRandomBatches(double batchSize) { //make batches of the current set
+        Set copy = clone();
+        Set[] batches = new Set[(int)Math.ceil(1/batchSize) + 1]; //init
+        for(int i=0;i< batches.length; i++) {
+            batches[i] = new Set(returnAttributesCount(), returnClassesCount(), returnclassNames());
+        }
+        int batch = 0;
+        for(int i=0; i<returnExamplesCount(); i++) { //fill batches
+            Random random = new Random();
+            int ID = random.nextInt(copy.returnExamplesCount()); //put random index
+            batches[batch].addEX(copy.returnExample(ID));
+            copy.deleteEX(ID);
+            if ((i+1)%(int)(returnExamplesCount()*batchSize)==0) { //go to next batch if needed
+                batch++;
+            }
+        }
+        return batches;
+    } 
+    }
+
+ClassificationEvaluator.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project3;
+//This class is the evaluator for Classification sets, returns the mean squared error and accuracy
+public class ClassificationEvaluator {
+    double accuracy; //Holds the accuracy
+    double mse; //Holds the mean squared error
+
+    public double returnAccuracy() { //return methods
+        return accuracy;
+    }
+    public double returnMSE() {
+        return mse;
+    }
+    public double returnME() {
+        return 0;
+    }
+
+    public ClassificationEvaluator(double[] prediction, Set act) {
+        int examplesCount = act.returnExamplesCount();
+        accuracy = 0;
+        for (int i=0; i<act.returnExamplesCount(); i++) {
+            if (Math.round((double) act.returnExampleE(i)) == Math.round(prediction[i])) {
+                accuracy++;
+            }
+        }
+        accuracy /= (double)examplesCount; //get final accuracy
+
+        int[] actualClassCount = new int[act.returnClassesCount()]; //Methods to calculate mean squared error
+        int[] predictionClassCount = new int[act.returnClassesCount()];
+
+        for (int i=0; i<act.returnExamplesCount(); i++){
+            actualClassCount[(int)act.returnExampleE(i)]++;
+            predictionClassCount[(int)prediction[i]]++;
+        }
+
+        double distanceTotal = 0; //get Difference
+
+        for(int i=0; i<actualClassCount.length; i++){
+            distanceTotal += Math.pow((predictionClassCount[i]-actualClassCount[i]), 2);
+        }
+        mse=distanceTotal/act.returnClassesCount(); //get final MSE
+    }
+}
+
+
+RegressionEvaluator.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project3;
+public class RegressionEvaluator {
+    //This class is the evaluator for regression sets, returns the average squared error and average error
+    double mse; //Holds the average squared error
+    double me; //Holds the average error
+
+    public double returnAccuracy() { //do nothing
+        return 0;
+    }
+    public double returnMSE() { //return Mean Squared Error
+        return mse;
+    }
+    public double returnME() { //return Mean Error
+        return me;
+    }
+
+    public RegressionEvaluator(double[] pred, Set act) { //Standardize the values using z-scores, then average and standard deviation will be computed using the values from the actual dataset
+        int examplesCount = act.returnExamplesCount();
+        double average = 0.0; //compute the average of the training data
+        for (int i=0; i<examplesCount; i++) { 
+            average += act.returnExample(i).returnValue();
+        }
+            average/=examplesCount;
+
+
+        double standardDeviation = 0.0;         // compute SD of the training data
+        for (int i = 0; i < examplesCount; i++) {
+            standardDeviation += Math.pow(act.returnExample(i).returnValue()-average, 2);
+        }
+        standardDeviation /= (examplesCount-1);
+        standardDeviation = Math.sqrt(standardDeviation);
+
+        double[] actualZArray = new double[examplesCount];   // initialize z arrays for predicted and actual values
+        double[] predictionZArray = new double[examplesCount];
+
+        for (int i=0; i<examplesCount; i++) { //populate the z arrays
+            actualZArray[i] = act.returnExample(i).returnValue()-average;   //find difference between value and average
+            predictionZArray[i] = pred[i]-average;
+            actualZArray[i] /= standardDeviation;    // divide by SD
+            predictionZArray[i] /= standardDeviation;  // divide by SD
+        }
+        mse = 0;
+        me = 0;
+        for (int i=0; i<act.returnExamplesCount(); i++){         //Calculate average squared error
+            double difference = pred[i]-(double)act.returnExampleE(i);
+            me += difference;
+            mse += Math.pow(difference, 2);
+        }
+        mse /= examplesCount; //Get average
+        me /= examplesCount;
+    }
+}
+
+FileHandler.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project3;
+import java.io.File;
+import java.io.FileReader;
+import java.io.BufferedReader;
+import java.io.IOException;
+// This is just the data reader class that handles input files, basically reused from prgm1 populates examples and the datasum array with the same attributes, examples and classes 
+public class FileHandler {
+    private final int subsetsCount = 10; //variables
+    private final String file_name;
+    private final int[] dataSum = new int[4]; //same attribute, set, and classes
+
+    private String[] classID;
+    private Set[] subsets = new Set[subsetsCount];
+    private Set VS;
+    private Matrix[] sMatrix;
+
+    private int returnAttributesCount(){ //return methods
+        return this.dataSum[0];
+    }
+    private int returnClassesCount(){
+        return this.dataSum[2];
+    }
+    private int returnCAttributesCount(){
+        return this.dataSum[3];
+    }
+
+    public String[] returnClassNames(){
+        return this.classID;
+    }
+    public Set[] returnSubsets(){
+        return this.subsets;
+    }
+    public Set returnVS(){
+        return this.VS;
+    }
+    public Matrix[] returnSMatrix(){
+        return this.sMatrix;
+    }
+    public int returnExamplesCount() {
+        return this.dataSum[1];
+    };
+
+    public FileHandler(String file) throws IOException{ //set file name and open
+        this.file_name = file;
+        try{readFile();}
+        catch(IOException e){}
+    }
+
+    private void readFile() throws IOException {
+        File file = new File(file_name);
+        BufferedReader br = new BufferedReader(new FileReader(file));
+        String line = br.readLine();
+        String[] split_line = line.split(",");
+
+        for (int i=0; i<4; i++){
+            this.dataSum[i] = Integer.parseInt(split_line[i]);
+        }
+
+        int attrCount = this.returnAttributesCount();
+        int examplesCount = this.returnExamplesCount();
+
+
+        int classesCount = this.returnClassesCount();
+        int CAttributeCount = this.returnCAttributesCount();
+
+        this.sMatrix = new Matrix[CAttributeCount];
+        for (int i=0; i<CAttributeCount; i++){
+            try{ this.sMatrix[i] = readMatrix(br); }
+            catch(IOException e){ System.err.println("Unexpected end of file"); }
+        }
+
+        if (classesCount == 0){ this.classID = null; } //set regression for classes count value
+
+        else{ //classification
+            this.classID = new String[classesCount];
+            line = br.readLine();
+            split_line = line.split(",");
+            for (int i=0; i<classesCount; i++){
+                this.classID[i] = split_line[i];
+            }
+        }
+
+        for (int i=0; i<this.subsetsCount; i++){
+            this.subsets[i] = new Set(attrCount, classesCount, this.classID); //populate array with class, examples, attr (same as prgm1)
+        }
+
+        for (int i=0; i<examplesCount; i++){ //populate examples
+            line = br.readLine();
+            Example tmp = new Example(line, attrCount);
+            this.subsets[tmp.returnSubsetID()].addEX(tmp);
+        }
+        this.VS = this.subsets[0];
+        br.close();
+    }
+
+    private Matrix readMatrix(BufferedReader br) throws IOException { //populate matrix from input
+        String line = br.readLine();
+        String[] data = line.split(",");
+        int attrID = Integer.parseInt(data[0]);
+        int tmpCount = Integer.parseInt(data[1]);
+        int binsCount = Integer.parseInt(data[2]);
+        Matrix m = new Matrix(attrID, tmpCount);
+
+        for (int i=0; i<tmpCount; i++){
+            line = br.readLine();
+        }
+        return m;
+    }
+}
+
+NeuralNet.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+package project3;
+public interface NeuralNet {
+    
+    public void train(Set training_set);
+    public double[] test (Set testing_set);
+    public double predict(Example ex);
+    public Vector[] generateLayerResults(Example ex);
+    public Vector[] generateLayerDerivatives();
+    public Layer returnLayer(int index);
+    public int[][] returnLayerDimension();
+    
+}
+
+Activation Function.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+package project3;
+public interface ActivationFunction {
+    
+    public Vector computeActivation(Vector vector);
+    public Vector returnDerivative();
+    
+}
+
+Data Processor.py----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Logan Ladd and Asher Worley
+# Preproccesser to create two csv files, One with original data with s for 10 fold CV, very similar to prgm2
+
+import pandas as pandas
+import numpy as numpy
+import random
+import csv
+
+class data:
+    def __init__(self, classLocation, rm, missing, classify, file, split): #start data frame
+        dataFrame = pandas.DataFrame()
+        fileName = file #variables
+        s=[] #sets
+        b=[] #bins
+        i=0  #iterators
+        j=0
+        dataFrame=pandas.read_csv(file+'.data',skiprows=rm,sep=split,header=None) #read file
+ 
+        while j<len(dataFrame): #loop through file
+            s.append(i)
+            i+=1
+            if i>=10:
+                i=0
+            j+=1
+
+        dataFrame.rename(columns={classLocation: 'Class'}, inumpylace=True) #rename 
+        column = ['Class']
+        
+        newColumn = column + (dataFrame.columns.drop(column).tolist())
+        
+        dataFrame = dataFrame[newColumn]
+        
+        dataFrame = dataFrame.sample(frac=1).reset_index(drop=True) #randomize examples
+
+        columnFIX=['Class'] #rename Attr
+        for j in range(len(dataFrame.columns)-1):
+            columnFIX.append(j)
+        dataFrame.columns = columnFIX
+
+        if classify: #convert names to ints
+            tmp=(dataFrame.Class.unique())
+            tmp=numpy.sort(tmp)
+            for j in range(len(tmp)):
+                dataFrame['Class'] = dataFrame['Class'].replace(tmp[j], j)
+
+        else:
+            classB = dataFrame['Class'] #bin regression values
+            dataFrame['Class'] = pandas.cut(dataFrame['Class'], 10, labels=False)
+
+        dataFrame.insert(1, 's', s) #Assign s
+
+        cat=[] #convert cat varaiables to ints and index, also track attr for cat or numeric
+        catVarCount=0
+        
+        for j in range(len(dataFrame.columns)-2):
+            if dataFrame[j].dtype == object:
+                original = dataFrame[j].unique()
+                replace = dict(zip(original, range(len(original))))
+                dataFrame[j]=dataFrame[j].map(replace)
+                cat.append("0")
+                catVarCount += 1
+            else:
+                cat.append("1")
+        matrix = ''
+        
+        for j in range(len(cat)): # matrix for distance metric for cat variables
+            if cat[j]=='0':
+                matrix+=str(j)+','+str(len(dataFrame[j].unique()))+','+str(len(dataFrame.Class.unique()))+'\n'
+                for i in dataFrame[j].unique():
+                    for b in numpy.sort(dataFrame.Class.unique()):
+                        matrix += str(len(dataFrame[(dataFrame['Class']==b)&(dataFrame[j]==i)])/len(dataFrame[dataFrame['Class']==b]))+','
+                    matrix+='\n'
+
+            else:
+                if (dataFrame[j].max()==dataFrame[j].min()):
+                    dataFrame[j].values[:]=0
+                else:
+                    dataFrame[j]=dataFrame[j].apply(lambda x: (x-dataFrame[j].min())/(dataFrame[j].max()-dataFrame[j].min()))
+
+
+        if classify:
+            header=str(len(dataFrame.columns)-2)+','+str(len(dataFrame))+','+str(
+                dataFrame['Class'].nunique())+','+str(catVarCount)+'\n'+matrix+','.join(map(str, tmp))+','+'\n'
+        else:
+            dataFrame['Class']=classB
+            header = str(len(dataFrame.columns)-2)+','+str(len(dataFrame))+','+'-1'+','+ str(catVarCount)+'\n'+matrix
+        with open(fileName+'.csv','w') as fp:
+            fp.write(header)
+            fp.write((dataFrame.to_csv(index=False, header=False)))
+            fp.close
+
+Raw Output------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+No Momentum
+FILE: breastcancer.csv, 0, 0.2,0.25,0.25,316.80
+FILE: breastcancer.csv, 1, 0.2,0.25,0.26,248.81
+FILE: breastcancer.csv, 2, 0.2,0.25,0.17,4835.91
+FILE: glass.csv, 0, 0.1,0.25,0.9,29.45
+FILE: glass.csv, 1, 0.1,0.25,0.99,0.75
+FILE: glass.csv, 2, 0.1,0.25,1.00,0.30
+FILE: soybeansmall.csv, 0, 0.1,0.25,0.90.60
+FILE: soybeansmall.csv, 1, 0.1,0.25,0.88,1.05
+FILE: soybeansmall.csv, 2, 0.1,0.25,0.88,1.11
+FILE: abalone.csv, 0, 0.1,0.5,0.65,-0.00
+FILE: abalone.csv, 1, 0.1,0.5,0.67,-0.03
+FILE: abalone.csv, 2, 0.1,0.5,0.71,-0.02
+FILE: machine.csv, 0, 0.1,0.5,0.30,0.04
+FILE: machine.csv, 1, 0.1,0.5,0.280.06
+FILE: machine.csv, 2, 0.1,0.5,0.23,0.01
+FILE: forestfires.csv, 0, 0.1,0.5,2.76,0.31
+FILE: forestfires.csv, 1, 0.1,0.5,26.40,0.48
+FILE: forestfires.csv, 2, 0.1,0.5,2.23,0.40
+ 
+Momentum
+FILE: breastcancer.csv, 0, 0.2,0.25,0.25,316.80
+FILE: breastcancer.csv, 1, 0.2,0.25,0.26,248.81
+FILE: breastcancer.csv, 2, 0.2,0.25,0.17,4835.91
+FILE: glass.csv, 0, 0.1,0.25,0.9,29.45
+FILE: glass.csv, 1, 0.1,0.25,0.99,0.75
+FILE: glass.csv, 2, 0.1,0.25,1.00,0.30
+FILE: soybeansmall.csv, 0, 0.1,0.25,0.90.60
+FILE: soybeansmall.csv, 1, 0.1,0.25,0.88,1.05
+FILE: soybeansmall.csv, 2, 0.1,0.25,0.88,1.11
+FILE: abalone.csv, 0, 0.1,0.5,0.65,-0.00
+FILE: abalone.csv, 1, 0.1,0.5,0.67,-0.03
+FILE: abalone.csv, 2, 0.1,0.5,0.71,-0.02
+FILE: machine.csv, 0, 0.1,0.5,0.30,0.04
+FILE: machine.csv, 1, 0.1,0.5,0.280.06
+FILE: machine.csv, 2, 0.1,0.5,0.23,0.01
+FILE: forestfires.csv, 0, 0.1,0.5,2.76,0.31
+FILE: forestfires.csv, 1, 0.1,0.5,26.40,0.48
+FILE: forestfires.csv, 2, 0.1,0.5,2.23,0.40

@@ -1,0 +1,1742 @@
+Logan Ladd and Asher Worley's Java Code for Project 4
+First is the Java Code itself in descending order of importance
+Then the processor Python Program
+Finally Raw Output at the bottom of the file
+
+Classes are seperated by --------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+MLP.java------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project4;
+import java.util.ArrayList;
+ // Class implements a feed-forward MLP network. The weights in each layer are represented as matrices and input vectors are fed through a number of layers until the output layer is reached
+//note training and testing is done is the specific algorithm classes.
+public class MLP implements NeuralNet { 
+    public static final double weightBound = 15; //abs of bounds on the starting wieghts
+    private int weightCount; //store the number of weights in the MLP for conversion of the network to vector format
+    private final SimMatrix[] matrix;
+    private Layer[] layer; //array of layer holds the weights that make up the network
+    private final int tmp1;
+    private final int[] tmp2;
+    
+    public MLP(int[] top, SimMatrix[] similarity) { //create MLP with all weights at 0
+        this.matrix = similarity;
+        this.tmp1 = top[0];
+        this.tmp2 = new int[this.tmp1];
+        for (int i = 0; i < this.tmp2.length; i++) {
+            this.tmp2[i] = top[i+1]; 
+        }
+        this.layer = new Layer[tmp1 + 1];
+        int l = top.length;
+        this.createLayers(top[l-2], top[l-1]);
+        this.weightCount = 0;
+        for (int i = 0; i < this.layer.length; i++) { 
+            this.weightCount += this.layer[i].returnInputsCount(); 
+        }
+    }
+
+    @Override
+    public double[] test(Set testSet) {
+        ArrayList <Example> ex = null;
+        double[] predictions = new double[ex.size()];
+        for (int i = 0; i < ex.size(); i++) { // iter through ex
+            predictions[i] = this.predict(ex.get(i));
+        }
+        return predictions;
+    }
+
+    @Override
+    public double predict(Example ex) { //predict the real value or class of an example, done by inputting examples, feeding forward, and making a decision from the output of the layer.
+        Vector out = generateLayerOutputs(ex)[layer.length]; //propogate through the network
+        if (out.returnLength() == 1) { //check for C or R
+            return out.get(0);
+        } else {
+            return (double) out.getMaxIndex(); //classification
+        }
+    }
+
+    @Override
+    public Vector[] generateLayerOutputs(Example ex) { //get output of each layer
+        Vector[] out = new Vector[layer.length + 1];
+        out[0] = new Vector(ex, matrix);
+        for (int i = 0; i < layer.length; i++) {
+            out[i].insertBias();
+            out[i + 1] = layer[i].feedForward(out[i]);
+        }
+        return out;
+    }
+
+    @Override
+    public Vector[] generateLayerDerivative() { //return derivative of each layer
+        Vector[] d = new Vector[layer.length];
+        for (int i = 0; i < layer.length; i++) {
+            d[i] = layer[i].returnDerivative();
+        }
+        return d;
+    }
+
+    @Override
+    public int[][] returnLayerDimensions() { //returns dimensions of layer
+        int[][] d = new int[layer.length][2];
+        for (int i = 0; i < layer.length; i++) {
+            d[i][0] = layer[i].returnNodesCount();
+            d[i][1] = layer[i].returnInputsCount();
+        }
+        return d;
+    }
+    
+    public Layer returnLayer(int ID) { //return layer at specified index
+        return this.layer[ID];
+    } 
+
+    public Vector convert2Vector() { //conver the layer of a network to vector format so it can be manipulated with pop algorithms
+        Vector vector = new Vector(this.weightCount);
+        int ID = 0; //populate and iterate through layer
+        for (int i = 0; i < this.layer.length; i++) {
+            Matrix weight = this.layer[i].returnWeights();
+            for (int j = 0; j < weight.returnRowsCount(); j++) { //iterate through matrix and vectors
+                Vector row = weight.returnRow(j);
+                for (int k = 0; k < row.returnLength(); k++) {
+                    vector.set(ID, row.get(k));
+                    ID++;
+                }
+            }
+        }
+        return vector;
+    }
+    
+    public void setWeights(Vector vector) { //set the vector of the network based off the vector in the parameter, 1-1 correspondence
+            int k = 0;      //iterate
+            for (int i = 0; i < this.layer.length; i++) {
+                int rowCount = this.layer[i].returnNodesCount();
+                int colCount = this.layer[i].returnInputsCount();
+                Matrix matrix = new Matrix(rowCount, colCount); //create new matrix
+                for (int j = 0; j < matrix.returnRowsCount(); j++) { //populate matrix
+                    Vector tmp = new Vector(colCount); //row in the matrix
+                    for (int m = 0; m < tmp.returnLength(); m++) {
+                        tmp.set(m, vector.get(k));
+                        k++; 
+                    }
+                    matrix.setRow(j, tmp);
+                }
+                this.layer[i].setWeights(matrix); //set weights
+            }
+        }
+    
+    public void randomPopulationWeights() { //randomly populate all weights
+        for (int i = 0; i < layer.length; i++) {
+            layer[i].populateRandom(-weightBound, weightBound);
+        }
+    }
+
+    public int[] getTopology() { //compute and return top of network
+        int l = this.tmp1 + 3;
+        int[] top = new int[l];
+        top[0] = this.tmp1;
+        for (int m = 0; m < this.tmp1; m++) { 
+            top[m+1] = this.tmp2[m];
+        }
+        top[l-2] = this.layer[0].returnInputsCount() - 1;        // subtract 1 for bias node
+        top[l-1] = this.layer[this.layer.length-1].returnNodesCount();
+        return top;
+    }
+
+    public MLP copy() { //copy the current network
+        int[] top = this.getTopology();
+        MLP tmp = new MLP(top, this.matrix);
+        tmp.setWeights(this.convert2Vector());
+        return tmp;
+    }
+
+    private void createLayers(int input_dim, int output_dim) { //init layer with the correct dimensions
+        
+        if (tmp2.length == 0){ 
+            if (output_dim == 1){ 
+                layer[layer.length - 1] = new Layer(new Linear() {
+                }, 1, input_dim + 1);} 
+            else {
+                layer[layer.length - 1] = new Layer(new Logistic(), output_dim, input_dim + 1);}}
+        
+        else { 
+            layer[0] = new Layer(new Logistic(), tmp2[0], input_dim + 1); 
+            for (int i = 1; i < layer.length - 1; i++) {
+                layer[i] = new Layer(new Logistic(), tmp2[i], layer[i - 1].returnNodesCount() + 1);}
+            if (output_dim == 1) { //construct the output layer
+                layer[layer.length - 1] = new Layer(new Linear(), 1, layer[layer.length - 2].returnNodesCount() + 1);
+            } else {
+                layer[layer.length - 1] = new Layer(new Logistic(), output_dim, layer[layer.length - 2].returnNodesCount() + 1);
+            }}}}
+	
+
+DiffEvo.java---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project4;
+import java.util.Random;
+// Class to use Differential Evolution Alg to train an MLP. Class creates cycles of mutation, corssover, and replacements. Utilizes uniform crossover, selections at random and single difference mutation of vectors.
+public class DiffEvo implements popinterface {
+    private final int[] top; //outlines MLP dimensions and layers.
+    private final int size; //tuned to effect search
+    private final double coRate;
+    private final double mutationRate;
+    private final int generationsMax; //end training
+    private Vector[] pop; //Vectors to search through the space
+    private double[] popFitness;
+    private Set data; //data container
+    private final SimMatrix[] matrix; //data container in matrix
+    private Vector bestOverall; //ideal vector
+    private double bestFit;
+    private final Random random;
+
+    public DiffEvo(int[] top, int size, double coRate, double mutationRate, int generationsMax, SimMatrix[] matrix) {
+        this.top = top;
+        this.size = size;
+        this.coRate = coRate;
+        this.mutationRate = mutationRate;
+        this.generationsMax = generationsMax;
+        this.matrix = matrix;
+        this.random = new Random();
+        
+    }
+
+    private void createPopulation() { //init populations of vectors based on topology of network
+        pop = new Vector[size];
+        bestOverall = null; //init best information
+        bestFit = Double.MIN_VALUE;
+        for (int i=0; i<pop.length; i++) { //find population
+            MLP net = new MLP(top, matrix); //create MLP
+            net.randomPopulationWeights(); //enter weights
+            pop[i] = net.convert2Vector(); //convert to vector
+        }
+    }
+
+    private double findFitness(Vector indiv) { //finds fitness of an indiv
+        MLP net = new MLP(top, matrix); //creat MLP
+        net.setWeights(indiv);
+        double[] result = net.test(data); //enter training data
+        if (data.returnClassesCount()==-1) {
+            RegressionEvaluator evaluation = new RegressionEvaluator(result, data); //regression and classification handlers
+            return evaluation.returnMSE() * -1; 
+        } 
+        
+        else{
+            ClassificationEvaluator evaluation = new ClassificationEvaluator(result, data);
+            return evaluation.returnAccuracy();
+        }
+    }
+    
+    
+    @Override
+    public void train(Set training){ //trains an MLP set using diff evoultions
+        data = training;
+        createPopulation();
+        int gen = 0;
+        while (gen<generationsMax) { //iterate for generations
+            for (int i=0; i<size; i++) { //iterations = pop size
+                int targetID = random.nextInt(size); //find fitness
+                Vector targetVector = pop[targetID];
+                double targetFitness = findFitness(targetVector);
+                Vector trialVector = mutate(); //try vector with fitness
+                trialVector = cross(targetVector, trialVector);
+                double trialFitness = findFitness(trialVector);
+                if (targetFitness < trialFitness) { //replace fitness if trail is greater than target
+                    pop[targetID] = trialVector;
+                }
+            }
+            gen++; }}
+
+    @Override
+    public MLP findBest(){ //returns best indiv in pop
+        this.bestFit=Double.NEGATIVE_INFINITY;
+        popFitness=new double[size];
+        for (int i=0; i<pop.length; i++) { //find fitness of all members
+            popFitness[i]=findFitness(pop[i]);
+        } 
+        
+        for (int i=0; i<pop.length; i++) { //find most fitness indiv
+            if (popFitness[i]>bestFit){
+                bestFit=popFitness[i];
+                bestOverall = pop[i];
+            }
+        }
+        MLP net = new MLP(top, matrix); //create MLP
+        net.setWeights(bestOverall);
+        return net;
+    }
+
+    
+    private Vector mutate() { //create trial vector with single difference vector
+        Vector[] trailVectortmp = {pop[random.nextInt(size)], pop[random.nextInt(size)], pop[random.nextInt(size)]}; //get random vectorrs
+        Vector trialVector = trailVectortmp[1].minus(trailVectortmp[2]); // x1+B(x2-x3)
+        trialVector = trialVector.mult(mutationRate);
+        return trialVector;
+    }
+
+    
+    private Vector cross(Vector targetVector, Vector trialVector) { //cross ref target and trail vector based on rate using uniforn crossover
+        targetVector = targetVector.copy();
+        trialVector = trialVector.copy();
+        for (int i=0; i<targetVector.returnLength(); i++) { //test if values will be crossed
+            if (random.nextDouble()<=coRate) {
+                double temp = targetVector.get(i); //swap
+                targetVector.set(i, trialVector.get(i));
+                trialVector.set(i, temp);
+            }
+        }
+        Vector finalcross = trialVector;
+        return finalcross;
+    }
+}
+
+Genetic.java-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project4;
+import java.util.Arrays;
+import java.util.Random;
+ // Genetic alg to train and optimal MLP network. Performs selection, crossover, mutation, and replacement while searching the space of solutions for convergence
+public class Genetic implements popinterface {  
+    private static final int childrenDivisor = 4; //determines number of children created divisor
+    private static final double minSD = MLP.weightBound* 100; //mimimum SD of the mutation operator
+    private final int[] top; // outlines MLP dimension, layer, and top
+    private final int popSize; //tuned 
+    private final double coRate; //determines crossover occurance rate
+    private final double mutationRate; //similar for mutation
+    private final int genMax; //final generations
+    
+    private Vector[] pop; //arraus that contain vectors to manipulate search through the hyperspace, current population, parents of offspring, and children
+    private double[] popFitness;
+    private int[] popRank;
+    private double[] popSD;
+    private Vector[] parents;
+    private Vector[] children;
+
+    private Vector overallBest; //track best network
+    private double overallBestFitness;
+    private Set data; //evaulate fitness
+    private final SimMatrix[] matrix;
+    private final Random random;
+
+    public Genetic(int[] topology, int maxGen, int popSizes, double crossoverRate, double muRate, SimMatrix[] smatrix) {
+        top = topology;
+        popSize = popSizes;
+        coRate = crossoverRate;
+        mutationRate = muRate;
+        genMax = maxGen;
+        matrix = smatrix;
+        random = new Random();
+    }
+
+    @Override
+    public void train(Set trainSet) { //trains MLP using the genetic algorithms
+        data = trainSet;
+        createPop(); //init
+        for(int g = 0; g < genMax; g++){ //training over generations
+            rankPop(); //rank
+            selectParents(); //select parents
+            crossParents();
+            findSD();//compute SD of elements in vectors
+            mutateChildren();
+            replaceChildren(); //replace into general pop
+        }
+    }
+
+    private void createPop() { //init pop of vectors based on target topology of network
+        pop = new Vector[popSize]; //initialize everything
+        parents = new Vector[popSize / childrenDivisor];
+        children = new Vector[popSize / childrenDivisor];
+        popRank  = new int[popSize];
+        popFitness = new double[popSize];
+        overallBest = null;
+        overallBestFitness = Double.NEGATIVE_INFINITY;
+        
+        for(int i = 0; i < pop.length; i++) { //fill pop
+            MLP network = new MLP(top, matrix); // Create a MLP network
+            network.randomPopulationWeights(); //populate
+            pop[i] = network.convert2Vector(); //convert network to a vector
+        }
+    }
+    
+    private void findSD() { //find standard deviation
+        popSD = new double[pop[0].returnLength()];
+        for(int i=0; i<pop[0].returnLength(); i++) {
+            double[] vector_elements = new double[popSize];
+            for(int j=0;j< popSize; j++) {
+                vector_elements[j] = pop[j].get(i);
+            }
+            double avg= 0; //find avg
+            for(int j=0; j<vector_elements.length; j++) {
+                avg+=vector_elements[j];
+            }
+            avg/=vector_elements.length;
+            for(int j=0;j<vector_elements.length; j++) { //subract avg 
+                vector_elements[j]=Math.pow(vector_elements[j]-avg, 2);
+            }
+            avg = 0; //find new avg
+            for(int j=0; j<vector_elements.length; j++) {
+                avg += vector_elements[j];
+            }
+            avg/=vector_elements.length;
+            popSD[i] = Math.sqrt(avg); //square and place into SD array
+        }
+    }
+    
+    @Override
+    public MLP findBest() { //return the best MLP
+        MLP network = new MLP(top, matrix);
+        network.setWeights(overallBest);
+        return network;
+    }
+ 
+    private double findFitness(Vector individual) { //finds fitness of single individual
+        MLP network = new MLP(top, matrix); //creates MLP for individual
+        network.setWeights(individual);
+        double[] result = network.test(data); //test the network using training data
+        if (data.returnClassesCount() == -1) { //regression
+            RegressionEvaluator tmp = new RegressionEvaluator(result, data);
+            return tmp.returnMSE() * -1;
+        }
+        else { //classification
+            ClassificationEvaluator tmp = new ClassificationEvaluator(result, data);
+            return tmp.returnAccuracy();
+        }
+    }
+
+    private void rankPop() { //ranks populations, updating ranking array and the best, also uses fitness array
+        for(int i=0; i<pop.length; i++) { //find fitness
+            popFitness[i] = findFitness(pop[i]);
+        }
+        double[] tmp = Arrays.copyOf(popFitness, popFitness.length);
+        for(int i=0; i<pop.length; i++) { //fill rank array
+            int maxID = 0; // track the best ID
+            for(int j=1; j<pop.length; j++) {
+                if(tmp[j]>tmp[maxID]) {
+                    maxID = j; // Set the new max
+                }
+            }
+            popRank[maxID] = i; //set the ranking of max value, clear fitness in temp array
+            tmp[maxID] = Double.MIN_VALUE;
+           
+            if((i == 0) && (popFitness[maxID] > overallBestFitness)) { //check for update to all time best
+                overallBest = pop[maxID];
+                overallBestFitness = popFitness[maxID];
+            }
+        }
+    }
+
+    private void selectParents() { //selects parents from current gen, placing them into parents array: P(x)=2/|P|*(|P|-r(x))/(|P|+1)
+        double[] distance = new double[popSize]; //map ranks
+        double p = popSize;
+        double sum = 0;
+        for(int i = 0; i < popSize; i++) {
+            distance[i] = 2/p*(p-i)/(p+1);
+            sum += distance[i];
+        }
+        for(int i = 0; i < parents.length; i++) { //pop parent array
+            double tmp = random.nextDouble();
+            int sel=-1;
+            do{
+                sel++;
+                tmp -= distance[sel];
+            } while(tmp > distance[sel]);
+            parents[i] = pop[sel].copy(); //clone vector and store in parents array
+        }
+    }
+
+    private Vector[] cross(Vector a, Vector b) { //crosses two vectors using uniform crossover
+        a = a.copy(); b = b.copy(); //clone
+        for(int i = 0; i < a.returnLength(); i++) { //iterate and check for cloning
+            if(random.nextDouble() <= coRate) {
+                double tmp = a.get(i);
+                a.set(i, b.get(i));
+                b.set(i, tmp);
+            } 
+        }
+        Vector[] done = {a, b};
+        return done;
+    }
+
+    private void crossParents() { //crosses parents into array to create children who are placed in array
+        for(int i = 0; i < parents.length; i = i + 2) {
+            Vector[] done = cross(parents[i], parents[i+1]);
+            children[i] = done[0];
+            children[i+1] = done[1];
+        }
+    }
+    
+    private Vector mutate(Vector a) { //mutate vector with uniform probability, vectors are real values
+        a = a.copy();
+        for(int i = 0; i < a.returnLength(); i++) {
+            double SD = 0; //determine SD to be used
+            if(SD < minSD) {
+                SD = minSD;
+            }
+            if(random.nextDouble() <= mutationRate) { //check if mutation will occur
+                double update = a.get(i); //mutate
+                double creep  = random.nextGaussian()*SD; //take from a normal distance centered at 0 with a tuned SD
+                update += creep;
+                a.set(i, update);
+            } 
+        }
+        return a;
+    }
+    
+    private void mutateChildren() { //mutates children in child array
+        for(int i = 0; i < children.length; i++) {
+            children[i] = mutate(children[i]);
+        }
+    }
+
+    private void replaceChildren() { //insert children into population, replacing certain individuals if they are better
+        for(int i = 0; i < children.length; i++) {
+            int select = random.nextInt(popSize); // Compute random index
+            if(findFitness(children[i]) > popFitness[select]) {
+                pop[select] = children[i]; //replace if need be
+            }}}}
+
+
+ParticleSwarmOpt.java--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project4;
+ //Class to train MLP Networks using the PSO alg. This class will construct an isntance by passing appropriate values for the algorithm's parameters then calling the train methods. After training, a client can retrieve the best performing member of the swarm with a getter method
+public class ParticleSwarmOpt implements popinterface {
+    private final double pastC; //final multipliers for past and group experience, used in velocity update
+    private final double groupC;
+    private final int populationSize; //population size, tunable
+    private final int iterations; //iterations that the swarm will run through
+    private final int[] top; // array that describes the topology of network to be made in the swarm
+    private final SimMatrix[] matrix; //Similarity martiix for the data that the algorithm is ran on
+    private ParticleHelper[] population; //store population of individuals in the swarm
+    private ParticleHelper best; //store particle with the best performance
+    
+    public ParticleSwarmOpt(double cMult, double sMult, int[] top, //Set up a population of particles to be trained in the PSO
+        int populationSize, int iterations, SimMatrix[] matrix) {
+        this.pastC = cMult;
+        this.groupC = sMult;
+        this.populationSize = populationSize;
+        this.population = new ParticleHelper[populationSize];
+        this.iterations = iterations;
+        this.top = top;
+        this.matrix = matrix;
+    }
+
+    private int createPop() { //initialize particles with random weights
+        for (int i=0; i<this.populationSize; i++) { //initialize population and start network
+            MLP net = new MLP(this.top, this.matrix) {};
+            net.randomPopulationWeights(); //set weights
+            this.population[i] = new ParticleHelper(this.pastC, this.groupC, this.top, this.matrix);
+        }
+        this.best = new ParticleHelper(this.top, this.matrix, this.population[0].returnPosition());     //set best info
+        this.setBest(); //set best info for generation
+        return 0; 
+    }
+    
+    
+    @Override
+    public void train(Set training) {
+        ParticleHelper.setTrainingExamples(training); //set training data
+        int pBest = this.createPop(); //initialize population
+        boolean check = false;
+        for (int tmp=0; tmp<this.iterations && !check; tmp++) { //run 
+            double percent = (double)tmp / this.iterations; //compute percentage
+            for (int i=0; i<this.populationSize; i++) { //iterate
+                this.population[i].udpatePosition(percent); //update position
+            }
+            this.setBest(); //set best information
+            }}
+
+    private void setBest() { //class to set variable for generation
+        int runningBest=0;
+        for (int i=0; i<this.populationSize; i++) { //iterate
+            if (this.population[i].compareTo(this.population[runningBest]) >= 0) { runningBest = i; }
+        }
+        ParticleHelper.setGenerationBest(runningBest, this.population[runningBest]); //set best info in particle
+        if (this.population[runningBest].compareTo(this.best)>=0){  //change if needed
+            this.best.setPosition(this.population[runningBest].returnNetwork().convert2Vector());
+        }
+    }
+  @Override
+    public MLP findBest() { 
+	return this.best.returnNetwork(); 
+	}
+}
+
+ParticleHelper.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project4;
+import java.util.Random;
+ //Class meant to represent a particle in PSO alg, each consisting of a position vector in Euclidean Space and fitness associated with the position, main function to store the position as well as update the position in each generation
+public class ParticleHelper implements Comparable<ParticleHelper> {
+    private final double upper = 1.0; //multipliers for velocity
+    private final double lower = 0.4;
+    private final double velocitySecure = 1; //bound on magnitude of part of velocity vector
+    private final double pastC; //final multipliers for past and group experience, used in velocity update
+    private final double groupC;
+    private int[] top;
+    private SimMatrix[] matrix; //array used to construct MLP that positional vector represents
+    private double fitness; //store fitness
+    private Vector position; //current vector
+    private Vector velocity; //store previous velocity
+    private ParticleHelper particleBest; //store particles best network
+    private static ParticleHelper gBest; //store the vector form of current best network
+    private static int bestIndex; //store ID of gen best
+    private static Set data; //test examples for evaluating the fitness of the network
+    private Random random;
+
+    //Setter and Getter Methods
+    protected static void setTrainingExamples(Set tmp) { 
+        ParticleHelper.data = tmp; 
+    }
+    protected static ParticleHelper returnGenerationBest() {
+        return ParticleHelper.gBest; 
+    }
+    protected static int returnBestIndex() {
+        return ParticleHelper.bestIndex;
+    }
+
+    protected double returnFitness() {
+        return this.fitness; 
+    }
+    protected Vector returnPosition() { 
+        return this.position; 
+    }
+    
+    protected void setPosition(Vector tmp) { //set the position of a particle, update network and fitness
+        this.position = tmp.copy();
+        this.fitness = this.findFitness();
+    }
+
+    protected MLP returnNetwork() { //return network
+        MLP network = new MLP(this.top, this.matrix);
+        network.setWeights(this.position);
+        return network;
+    }
+
+    protected static void setGenerationBest(int ID, ParticleHelper best) { //set the generations best particle
+        ParticleHelper.bestIndex = ID;
+        ParticleHelper.gBest = best;
+    }
+    
+    
+    protected ParticleHelper(double pastC, double groupC, int[] top, SimMatrix[] matrix) { //build partivle that moves around in the space, finding optimal configuration
+        this.top = top;
+        this.matrix = matrix;
+        MLP network = new MLP(this.top, this.matrix); //initialize network
+        network.randomPopulationWeights();
+        this.position = network.convert2Vector();
+        this.fitness = this.findFitness();
+        this.pastC = pastC;
+        this.groupC = groupC;
+        this.particleBest = new ParticleHelper(this.top, this.matrix, this.position);
+        this.velocity = new Vector(this.position.returnLength());
+        this.velocity.populateVector(-1*this.velocitySecure, this.velocitySecure);
+        ParticleHelper.gBest = null;
+        this.random = new Random();
+    }
+
+    protected ParticleHelper(int[] top, SimMatrix[] matrix, Vector position) { //sotre current optimal config of network
+        this.top = top;
+        this.matrix = matrix;
+        this.position = position.copy();
+        this.fitness = this.findFitness();
+        this.pastC = 0;
+        this.groupC = 0;
+    }
+
+    @Override
+    public int compareTo(ParticleHelper par) { //return which of these are P are fit
+        if (this.fitness > par.returnFitness()) { 
+            return 1; 
+        }
+        else if (this.fitness == par.returnFitness()) {
+            return 0;
+        }
+        else { 
+            return -1; 
+        }
+    }
+
+    protected void udpatePosition(double percentage) { //method to update the position by the velocity update , O based on percent of iterations that have run
+            this.velocity = this.findVelocity(percentage); //compute velocity
+            this.position.add(this.velocity); //get new position
+            this.fitness = this.findFitness(); //find new fitness
+            if (this.compareTo(this.particleBest) >= 0) { 
+                this.particleBest.setPosition(this.position); 
+            } //compare to best
+    }
+
+    public double findFitness() { //compute and set fitness of a network
+            if (ParticleHelper.data.returnClassesCount() == -1) {
+                return this.fitnessME();
+            }
+            else {
+                return this.fitnessAccuracy();
+            }
+        }
+
+    private double fitnessAccuracy() { //compute accuracy of the particle, classification only
+        MLP network = new MLP(this.top, this.matrix);
+        network.setWeights(this.position);
+        double[] results = network.test(ParticleHelper.data);
+        ClassificationEvaluator evaluate = new ClassificationEvaluator(results, ParticleHelper.data);
+        return evaluate.returnAccuracy();
+    }
+
+    private double fitnessME() {
+        MLP network = new MLP(this.top, this.matrix);
+        network.setWeights(this.position);
+        if (ParticleHelper.data.returnClassesCount() == -1) {
+            double[] results = network.test(ParticleHelper.data);
+            RegressionEvaluator evaluate = new RegressionEvaluator(results, ParticleHelper.data);
+            return -1 * evaluate.returnME();
+        }
+        else {
+            double ME = 0.0; //compute summed MAE for probability and set the fitness at the end
+            int layersCount = network.returnLayerDimensions().length;
+            for (int i = 0; i < ParticleHelper.data.returnExamplesCount(); i++) {
+                Example ex = ParticleHelper.data.returnExample(i);
+                int act = (int)ex.returnValue();
+                Vector out = network.generateLayerOutputs(ex)[layersCount];
+                Vector target = new Vector(out.returnLength());
+                for (int j = 0; j < target.returnLength(); j++) {
+                    if (j == act) { target.set(j, 1.0); }
+                    else { target.set(j, 0.0); }
+                }
+                double difference = 0.0;
+                for (int k = 0; k < out.returnLength(); k++) {
+                    difference += Math.abs(out.get(k) - target.get(k));
+                }
+                ME += difference;
+            }
+            ME /= ParticleHelper.data.returnExamplesCount();
+            return -1 * ME;
+        }
+    }
+
+
+    private Vector findVelocity(double percentage) { //return velocity for this step
+        double O = this.upper - (percentage * (this.upper - this.lower)); //compute inertia
+        Vector inert = this.velocity.mult(O);
+        Vector particleDifference = this.particleBest.returnPosition().minus(this.position); //compute memory component
+        double pr = this.random.nextDouble();
+        particleDifference.mult(this.pastC);        
+        particleDifference.mult(pr);             
+        Vector gDifference = ParticleHelper.gBest.returnPosition().minus(this.position); // compute social component
+        double gr = this.random.nextDouble();
+        gDifference.mult(this.groupC);        
+        gDifference.mult(gr);         
+        Vector tmp = particleDifference.minus(gDifference); //compute velocity
+        tmp.add(inert);
+        for (int j = 0; j < tmp.returnLength(); j++) { //secure velocity
+            if (tmp.get(j) > this.velocitySecure) { tmp.set(j, this.velocitySecure); }
+            else if (tmp.get(j) < -1*this.velocitySecure) { tmp.set(j, -1*this.velocitySecure); }
+        }
+        return tmp;
+    }
+
+    protected double generationBestDistance() { //compute distance from this vectyore to the gen best vector
+        Vector current = this.position;
+        Vector best = ParticleHelper.gBest.returnNetwork().convert2Vector();
+        Vector difference = current.minus(best);
+        double distance = 0.0;
+        for (int i = 0; i < difference.returnLength(); i++) { //sum squared distance
+            distance += Math.abs(difference.get(i));
+        }
+        return distance;
+    }
+}
+
+Matrix.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project4;
+public class Matrix { //class to sotre and return a matrix made of vectors.
+    private Vector[] matrix; //store matrtix
+    private int columnCount; //store columns total
+
+    public Matrix(int num_rows, int columnCount){
+        this.matrix = new Vector[num_rows]; //init rows and columns
+        this.columnCount = columnCount;
+
+        for (int i = 0; i < num_rows; i++) { //start with 0's
+            this.matrix[i] = new Vector(columnCount); 
+        }
+    }
+    
+    public int returnColumnCount() { 
+        return this.columnCount; 
+    }
+    public int returnRowsCount() { 
+        return this.matrix.length; 
+    }
+    public Vector returnRow(int index) { 
+        return this.matrix[index]; 
+    }
+     public void setRow(int index, Vector v) { 
+         this.matrix[index] = v; 
+     }
+    
+    
+    public void add(Matrix add) { //add matrices together and store the result in a new matrix
+        boolean tmp = true; //check that adding works
+        if (this.returnRowsCount() != add.returnRowsCount()) { 
+            tmp = false; 
+        }
+        if (this.returnColumnCount() != add.returnColumnCount()) { 
+            tmp = false; 
+        }
+
+        if (!tmp) { 
+            System.err.println("Cant add matrix"); 
+        }
+        else { //add matrices
+            for (int j=0; j<this.returnRowsCount(); j++) {
+                this.returnRow(j).add(add.returnRow(j)); //add rows
+            }
+        }
+    }
+
+    public void DivideMatrix(double divide) { //divide each matrix 
+        for (int i = 0; i < this.returnRowsCount(); i++) { 
+            this.returnRow(i).divideVectors(divide);
+        }
+    }
+
+    public void MultiplyMatrix(double mult) { //multiply matrix
+        for (int i = 0; i < this.returnRowsCount(); i++) { 
+            this.returnRow(i).multiplyVectors(mult);
+        }
+    }
+
+    public void clearMatrix() { //clear matrix
+        for (int i = 0; i < this.returnRowsCount(); i++) {
+            this.returnRow(i).clearVectors(); 
+        }
+    }
+
+    protected void populateRandom(double low, double high) { //populate with random values
+        for (int i = 0; i < this.returnRowsCount(); i++) {
+            this.returnRow(i).populateVector(low, high);
+        }
+    }
+
+    protected Vector multiplyMV(Vector vector) { //multiply a matrix and a vector and then return the result in a vector
+        if (vector.returnLength() != this.returnColumnCount()) { //check validity
+            System.err.println("Not Permitted");
+            return null;
+        }
+        else{
+            Vector result = new Vector(this.returnRowsCount()); //create result with ccorrect size
+            for (int j = 0; j < this.returnRowsCount(); j++) { //compute the dot result
+                double dProduct = this.returnRow(j).dotProduct(vector);
+                result.set(j, dProduct);
+            }
+            return result;
+        }
+    }
+}
+
+
+Layer.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project4;
+
+public class Layer { //Class that represents a layer in the neural network, consists of a activation function and weight martix
+    private final Matrix weightMatrix; //store weights in a layer
+    private final ActivationFunction activationFunction;     // function used on the layer
+    private Vector derivative;     // derivative of each value in the finalOutput vector
+    private Matrix weights;
+
+    public void add(Matrix to_add) {  //add matrix to the weight in working layer
+        this.weightMatrix.add(to_add); 
+    }
+    
+    public void populateRandom(double lower, double upper) { //method to randomly populate weights in a layer
+        this.weightMatrix.populateRandom(lower, upper); 
+    }
+
+    public int returnNodesCount(){ //getter method
+        return this.weightMatrix.returnRowsCount(); 
+    }
+    public int returnInputsCount(){ 
+        return this.weightMatrix.returnColumnCount(); 
+    }
+    public Matrix returnWeights() { 
+        return this.weightMatrix; 
+    }
+    public void setWeights(Matrix m) {
+        this.weights = m; 
+    }
+    
+    
+    public Vector returnDerivative() { //method to get the vector that is the derivative
+        if (this.derivative == null) { 
+            System.err.println(""); 
+        return null; }
+        else { return this.derivative; }
+    }
+    
+    public Layer(ActivationFunction activationFunction, int nodesCount, int inputCount) {
+        this.activationFunction = activationFunction;
+        this.weightMatrix = new Matrix(nodesCount, inputCount);
+        this.derivative = null;
+    }
+
+    public Vector feedForward(Vector input) { //feed input forward
+        Vector finalOutput = this.weightMatrix.multiplyMV(input);//matrix to vector multiplication
+        finalOutput = this.activationFunction.computeActivation(finalOutput);//compute activation
+        this.derivative = this.activationFunction.returnDerivative();//get derivative
+        return finalOutput;
+    }
+}
+
+Vector.java------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project4;
+import java.util.ArrayList;
+import java.util.Random;
+public class Vector { //store a vector that can be manipulated by the nn
+    private double[] value;
+
+    public void set(int ID, double val) { 
+        this.value[ID] = val;
+    }
+    public double get(int ID) {
+        return this.value[ID];
+    }
+    public int returnLength() { 
+        return this.value.length;
+    } 
+    
+    public Vector(int len){ //create vector
+        this.value = new double[len];
+        for (int i = 0; i < len; i++) { this.set(i, 0.0); }
+    }
+    
+    public Vector(Example example, SimMatrix[] matrix){ //make vector from example
+        ArrayList<Double> attr = example.returnAttributes();
+        int size = attr.size();
+        for (int i=0; i<matrix.length; i++) {
+            size += matrix[i].returnOptionsCount()-1; //add the number of cat options to the array size
+        }
+        
+        this.value = new double[size];       
+        int tmp = 0;   //add attr to matrix
+        int tmp2 = 0;    
+        for (int i=0; i<this.value.length; i++) { 
+            if (tmp < matrix.length) {
+                if (tmp2==matrix[tmp].returnAttributeID()) { //check if categorical
+                    double val = attr.get(tmp2);
+                    tmp2++;
+                    int a = 0;
+                    for (a=0; a<matrix[tmp].returnOptionsCount(); a++) {
+                        if ((int)val == a) {  //test if attr value is current
+                            this.set(i + a, 1.0); 
+                        } 
+                        else{
+                            this.set(i + a, 0.0);
+                        }
+                    }
+                    i+=a-1;
+                    tmp++;
+                }
+                else { //add value
+                    this.set(i, attr.get(tmp2)); 
+                    tmp2++;
+                }
+            }
+            else { //add value
+                this.set(i, attr.get(tmp2)); 
+                tmp2++;
+            }
+        }
+    }
+    
+  public int getMaxIndex() {
+        int max = 0;
+        for(int i = 0; i < value.length; i++) {
+            if(value[i] > value[max]) {
+                max = i;
+            }
+        }
+        return max;
+    }
+
+    public void insertBias() { //insert 1 to vector to multiply the bias by 1
+        double[] copy = this.value.clone();
+        this.value = new double[this.returnLength()+1];
+        this.set(0,1.0);
+        for (int i=0; i<copy.length; i++) { //copy into new vector
+            this.set(i+1, copy[i]);
+        }
+    }
+
+    public void add(Vector add) { //add two vectors together
+            for (int i=0; i<this.returnLength(); i++) {
+                double val = this.get(i) + add.get(i); //find new value
+                this.set(i, val); //update
+        }
+    }
+    
+    public Vector minus(Vector subin) { //subtract vectors
+            Vector difference = new Vector(this.returnLength());
+            for (int i = 0; i < difference.returnLength(); i++) { 
+                difference.set(i, this.get(i) - subin.get(i)); 
+            }
+            return difference;
+    } 
+
+    public Vector mult(double op) { //multiply vectors
+        Vector tmp = new Vector(this.returnLength());
+        for (int i=0; i<tmp.returnLength(); i++) {
+            tmp.set(i, op*this.get(i));
+        }
+        return tmp;
+    }
+    
+    public Vector copy() {
+        Vector copy = new Vector(this.returnLength());
+        for (int i = 0; i < copy.returnLength(); i++) { 
+            copy.set(i, this.get(i)); 
+        }
+        return copy;
+    }
+    
+    protected void populateVector(double low, double high) { //populate vector with random values
+        Random rand = new Random();
+        for (int i = 0; i < this.returnLength(); i++) {
+            double val = rand.nextDouble();
+            val = low + (high - low) * val;
+            this.set(i, val);
+        }
+    }
+    
+    protected double dotProduct(Vector mult) { //compute the dot product between two vectors
+        if (this.value.length != mult.returnLength()) {
+            System.err.println("Vectors are not the same");
+            return Double.NaN;
+        }
+        else {
+            double product = 0.0;
+            for (int i = 0; i < this.returnLength(); i++) { product += this.get(i) * mult.get(i); }
+            return product; //return result
+        }
+    }
+
+    protected void multiplyVectors(double mult) { //multiply vectors
+        for (int i=0; i<this.returnLength(); i++) { 
+            this.set(i, mult * this.get(i));
+        }
+    }
+    
+    protected void divideVectors(double divide) { //divide vectors
+        for (int i=0; i<this.returnLength(); i++) { 
+            this.set(i, this.get(i) / divide); 
+        }
+    }
+    protected void clearVectors() { //clear vectors
+        for (int i=0; i<this.returnLength(); i++) { 
+            this.set(i,0.0); 
+        } 
+    }
+
+    public int returnMaxID() { //find max in vector
+        int max = 0;
+        for(int i = 0; i < value.length; i++) {
+            if(value[i] > value[max]) {
+                max = i;
+            }
+        }
+        return max;
+    }
+}
+
+Linear.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project4;
+public class Linear implements ActivationFunction {
+    private Vector derivative; //store Derivative of each value
+    
+    public Linear() { 
+        this.derivative = null; 
+    }
+    public Vector returnDerivative() { //return method
+        return this.derivative; 
+    }
+    
+    @Override
+    public Vector computeActivation(Vector vector) { //compute the activation of each value in an output vector, used as a linear sum
+        Vector activation = new Vector(vector.returnLength());
+        for (int i = 0; i < activation.returnLength(); i++) {
+            activation.set(i, vector.get(i)); //dot product already compute linear sum
+        }
+        
+        this.derivative = new Vector(vector.returnLength()); //initialize and populate derivative
+        for (int i = 0; i < this.derivative.returnLength(); i++) {
+            this.derivative.set(i, 1.0); //activation is just the linear sum, thherefore the derivative value is simply 1
+        }
+        return activation; //return
+    }
+}
+
+
+Logistic.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project4;
+public class Logistic implements ActivationFunction {
+    private Vector derivative; //store each derivative of each value in a vector
+    public Logistic() { 
+        this.derivative = null; 
+    }
+    
+    @Override
+    public Vector returnDerivative() { //return the derivative Vector
+        return this.derivative; 
+    }
+    
+    @Override
+    public Vector computeActivation(Vector vector) { //compute the activation of each value in an output vector. The AF is the logistic function, activation is computed on the output of an entire layer.
+        Vector activation = new Vector(vector.returnLength());    // compute sigmoid of each value in vector
+        for (int i=0; i<activation.returnLength(); i++) {
+            double initial = vector.get(i); //get initial value
+            activation.set(i, this.logisticFunction(initial)); //compute logistic function
+        }
+        
+        this.derivative = new Vector(activation.returnLength());   // initialize and populate derivative
+        for (int i = 0; i < this.derivative.returnLength(); i++) {
+            double temp = activation.get(i);  // logistic function is applied
+            temp=temp*(1-temp); //compute Derivative
+            this.derivative.set(i, temp); //store
+        }
+        return activation; //return activation
+    }
+    
+    private double logisticFunction(double initial) { //compute logsitc function of a value
+        double exp = Math.exp(-1 * initial);
+        return 1 / (1 + exp);
+    }   
+}
+
+ClassificationEvaluator.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project4;
+//This class is the evaluator for Classification sets, returns the mean squared error and accuracy
+public class ClassificationEvaluator {
+    double accuracy; //Holds the accuracy
+    double mse; //Holds the mean squared error
+
+    public double returnAccuracy() { //return methods
+        return accuracy;
+    }
+    public double returnMSE() {
+        return mse;
+    }
+    public double returnME() {
+        return 0;
+    }
+
+    public ClassificationEvaluator(double[] prediction, Set act) {
+        int examplesCount = act.returnExamplesCount();
+        accuracy = 0;
+        for (int i=0; i<act.returnExamplesCount(); i++) {
+            if (Math.round((double) act.returnExampleE(i)) == Math.round(prediction[i])) {
+                accuracy++;
+            }
+        }
+        accuracy /= (double)examplesCount; //get final accuracy
+
+        int[] actualClassCount = new int[act.returnClassesCount()]; //Methods to calculate mean squared error
+        int[] predictionClassCount = new int[act.returnClassesCount()];
+
+        for (int i=0; i<act.returnExamplesCount(); i++){
+            actualClassCount[(int)act.returnExampleE(i)]++;
+            predictionClassCount[(int)prediction[i]]++;
+        }
+
+        double distanceTotal = 0; //get Difference
+
+        for(int i=0; i<actualClassCount.length; i++){
+            distanceTotal += Math.pow((predictionClassCount[i]-actualClassCount[i]), 2);
+        }
+        mse=distanceTotal/act.returnClassesCount(); //get final MSE
+    }
+}
+
+RegressionEvaluator.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project4;
+public class RegressionEvaluator {
+    //This class is the evaluator for regression sets, returns the average squared error and average error
+    double mse; //Holds the average squared error
+    double me; //Holds the average error
+
+    public double returnAccuracy() { //do nothing
+        return 0;
+    }
+    public double returnMSE() { //return Mean Squared Error
+        return mse;
+    }
+    public double returnME() { //return Mean Error
+        return me;
+    }
+
+    public RegressionEvaluator(double[] pred, Set act) { //Standardize the values using z-scores, then average and standard deviation will be computed using the values from the actual dataset
+        int examplesCount = act.returnExamplesCount();
+        double average = 0.0; //compute the average of the training data
+        for (int i=0; i<examplesCount; i++) { 
+            average += act.returnExample(i).returnValue();
+        }
+            average/=examplesCount;
+
+
+        double standardDeviation = 0.0;         // compute SD of the training data
+        for (int i = 0; i < examplesCount; i++) {
+            standardDeviation += Math.pow(act.returnExample(i).returnValue()-average, 2);
+        }
+        standardDeviation /= (examplesCount-1);
+        standardDeviation = Math.sqrt(standardDeviation);
+
+        double[] actualZArray = new double[examplesCount];   // initialize z arrays for predicted and actual values
+        double[] predictionZArray = new double[examplesCount];
+
+        for (int i=0; i<examplesCount; i++) { //populate the z arrays
+            actualZArray[i] = act.returnExample(i).returnValue()-average;   //find difference between value and average
+            predictionZArray[i] = pred[i]-average;
+            actualZArray[i] /= standardDeviation;    // divide by SD
+            predictionZArray[i] /= standardDeviation;  // divide by SD
+        }
+        mse = 0;
+        me = 0;
+        for (int i=0; i<act.returnExamplesCount(); i++){         //Calculate average squared error
+            double difference = pred[i]-(double)act.returnExampleE(i);
+            me += difference;
+            mse += Math.pow(difference, 2);
+        }
+        mse /= examplesCount; //Get average
+        me /= examplesCount;
+    }
+}
+
+SimMatrix.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+/*Logan Ladd and Asher Worley */
+package project4;
+///Class to utilize a similarity matrix, each matirx contains of an attribute and an array that stores probabilities.
+public class SimMatrix {
+    private int attributeID; //attribute id
+    private int options; //number of options
+    private int binsCount; // number of bins
+    private double[][] matrix; //actual matrix
+    private int ClassCount;
+
+    public int returnAttributeID(){
+        return this.attributeID; } // return methods
+
+    public int returnClassCount(){
+        return this.ClassCount; }
+
+    public int returnOptionsCount(){
+        return this.options; }
+
+    public double returnProbability(int option, int classification){
+        return this.matrix[option][classification];
+    }
+
+    public SimMatrix(int attributeID, int options, int classCount){
+        this.attributeID = attributeID;
+        this.options = options;
+        this.binsCount = classCount;
+
+        matrix = new double[this.options][this.binsCount];
+    }
+
+    public void addRow(int option, String line){ //Adds a row to the matrix, each row consisting of probabilites thats value appears in the nth class of line
+        String[] data = line.split(","); //create string array
+        for (int i=0; i<data.length; i++){ // insert values of array
+            matrix[option][i] = Double.parseDouble(data[i]);
+        }
+    }
+}
+
+FileHandler.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project4;
+import java.io.File;
+import java.io.FileReader;
+import java.io.BufferedReader;
+import java.io.IOException;
+// This is just the data reader class that handles input files, basically reused from prgm1 populates examples and the datasum array with the same attributes, examples and classes 
+public class FileHandler {
+    private final int subsetsCount = 10; //variables
+    private final String file_name;
+    private final int[] dataSum = new int[4]; //same attribute, set, and classes
+
+    private String[] classID;
+    private Set[] subsets = new Set[subsetsCount];
+    private Set VS;
+    private Matrix[] sMatrix;
+
+    private int returnAttributesCount(){ //return methods
+        return this.dataSum[0];
+    }
+    private int returnClassesCount(){
+        return this.dataSum[2];
+    }
+    private int returnCAttributesCount(){
+        return this.dataSum[3];
+    }
+
+    public String[] returnClassNames(){
+        return this.classID;
+    }
+    public Set[] returnSubsets(){
+        return this.subsets;
+    }
+    public Set returnVS(){
+        return this.VS;
+    }
+    public Matrix[] returnSMatrix(){
+        return this.sMatrix;
+    }
+    public int returnExamplesCount() {
+        return this.dataSum[1];
+    };
+
+    public FileHandler(String file) throws IOException{ //set file name and open
+        this.file_name = file;
+        try{readFile();}
+        catch(IOException e){}
+    }
+
+    private void readFile() throws IOException {
+        File file = new File(file_name);
+        BufferedReader br = new BufferedReader(new FileReader(file));
+        String line = br.readLine();
+        String[] split_line = line.split(",");
+
+        for (int i=0; i<4; i++){
+            this.dataSum[i] = Integer.parseInt(split_line[i]);
+        }
+
+        int attrCount = this.returnAttributesCount();
+        int examplesCount = this.returnExamplesCount();
+
+
+        int classesCount = this.returnClassesCount();
+        int CAttributeCount = this.returnCAttributesCount();
+
+        this.sMatrix = new Matrix[CAttributeCount];
+        for (int i=0; i<CAttributeCount; i++){
+            try{ this.sMatrix[i] = readMatrix(br); }
+            catch(IOException e){ System.err.println("Unexpected end of file"); }
+        }
+
+        if (classesCount == 0){ this.classID = null; } //set regression for classes count value
+
+        else{ //classification
+            this.classID = new String[classesCount];
+            line = br.readLine();
+            split_line = line.split(",");
+            for (int i=0; i<classesCount; i++){
+                this.classID[i] = split_line[i];
+            }
+        }
+
+        for (int i=0; i<this.subsetsCount; i++){
+            this.subsets[i] = new Set(attrCount, classesCount, this.classID); //populate array with class, examples, attr (same as prgm1)
+        }
+
+        for (int i=0; i<examplesCount; i++){ //populate examples
+            line = br.readLine();
+            Example tmp = new Example(line, attrCount);
+            this.subsets[tmp.returnSubsetID()].addEX(tmp);
+        }
+        this.VS = this.subsets[0];
+        br.close();
+    }
+
+    private Matrix readMatrix(BufferedReader br) throws IOException { //populate matrix from input
+        String line = br.readLine();
+        String[] data = line.split(",");
+        int attrID = Integer.parseInt(data[0]);
+        int tmpCount = Integer.parseInt(data[1]);
+        int binsCount = Integer.parseInt(data[2]);
+        Matrix m = new Matrix(attrID, tmpCount);
+
+        for (int i=0; i<tmpCount; i++){
+            line = br.readLine();
+        }
+        return m;
+    }
+}
+
+Set.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project4;
+import java.util.ArrayList;
+import java.util.Random;
+// Class that creates a set of examples from the datasets, basically reused from prgm1
+public class Set {
+    private final int attrCount;
+    private final int classCount;
+    private String[] classID;
+    private ArrayList<Example> EX = new ArrayList<Example>();
+    public Set(int attrCount, int classCount, String[] classID){
+        this.attrCount = attrCount;
+        this.classCount = classCount;
+        this.classID = classID;
+    }
+
+    public void addEX(Example ex){ //add example
+        this.EX.add(ex);
+    }
+    public void addEX(int index, Example ex){
+        this.EX.add(index, ex);
+    }
+    public void deleteEX(int index){ //delete examples
+        this.EX.remove(index);
+    }
+    public void deleteEX(Example ex){
+        this.EX.remove(ex);
+    }
+    public void replaceEX(int index, Example ex){  //replace EX
+        this.EX.set(index, ex);
+    }
+
+    public Set clone(){
+        // initialize new Set object
+        Set clone = new Set(this.attrCount, this.classCount, this.classID);
+
+        // add each example in this to clone
+        for (Example ex: EX){ clone.addEX(ex); }
+
+        return clone;
+    }
+
+    public <Arraylist>Example returnExample(int index){ //return methods
+        return this.EX.get(index);
+    }
+    public int returnClassesCount(){
+        return this.classCount;
+    }
+    public int returnAttributesCount(){
+        return this.attrCount;
+    }
+    public int returnExamplesCount(){
+        return this.EX.size();
+    }
+    public String[] returnclassNames(){
+        return this.classID;
+    }
+
+    public void voidSet(){
+        this.EX.clear();
+    }
+
+    Object returnExampleE(int i) {
+        throw new UnsupportedOperationException("");
+    }
+
+    public Set(Set[] subset, int tmpx, boolean VS){
+        this.attrCount = subset[0].returnAttributesCount();
+        this.classCount = subset[0].returnClassesCount();
+        this.classID = subset[0].returnclassNames();
+        boolean indexCheck = false;
+        if (VS){
+            if (tmpx>=1&&tmpx<subset.length){
+                indexCheck = true;
+            } //subset[0] will not be used in 10-fold CV
+        }
+        else if (tmpx>=0&&tmpx<subset.length){
+            indexCheck = true;
+        }
+        if (indexCheck){
+            int i = 0; //index in subset
+            if (VS){ //ignore subset[0] if VS is required
+                i = 1;
+            }
+
+            for ( ; i < subset.length; i++){ //process subset
+                if (tmpx != i){
+                    Set tmp = subset[i];
+                    for (int j=0; j<tmp.returnExamplesCount(); j++){  //add example to subset
+                        this.addEX(tmp.returnExample(j));
+                    }
+                }}}}
+
+    public Set returnRandomBatch(double batchSize) {
+        Set copy = clone(); //clone for randomization
+        Set batch = new Set(returnAttributesCount(), returnClassesCount(), returnclassNames());
+        for(int i = 0; i < (int)(returnExamplesCount() * batchSize); i++) { //fill bacth
+            Random random = new Random();
+            int ID = random.nextInt(copy.returnExamplesCount()); //put random index
+            batch.addEX(copy.returnExample(ID));
+            copy.deleteEX(ID);
+        }
+        return batch;
+    }
+
+    
+    public Set[] returnRandomBatches(double batchSize) { //make batches of the current set
+        Set copy = clone();
+        Set[] batches = new Set[(int)Math.ceil(1/batchSize) + 1]; //init
+        for(int i=0;i< batches.length; i++) {
+            batches[i] = new Set(returnAttributesCount(), returnClassesCount(), returnclassNames());
+        }
+        int batch = 0;
+        for(int i=0; i<returnExamplesCount(); i++) { //fill batches
+            Random random = new Random();
+            int ID = random.nextInt(copy.returnExamplesCount()); //put random index
+            batches[batch].addEX(copy.returnExample(ID));
+            copy.deleteEX(ID);
+            if ((i+1)%(int)(returnExamplesCount()*batchSize)==0) { //go to next batch if needed
+                batch++;
+            }
+        }
+        return batches;
+    } 
+    }
+
+
+Example.java---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Logan Ladd and Asher Worley */
+package project4;
+import java.util.ArrayList;
+//Class to create an example in dataset, basically reused from prgm1. Each example contains a val, subset, and attrIDibute
+public class Example {   
+    private final double val; //store type of class an example is in
+    private final int subsetID; //store which subset and example is for
+    private ArrayList<Double> attrID; //story values of attr for examples
+
+        
+    public double returnValue(){ //returner methods
+        return this.val; 
+    } 
+    public int returnSubsetID(){
+        return this.subsetID;
+    }
+    public ArrayList<Double> returnAttributes(){ 
+        return this.attrID;
+    }
+    
+    public Example(String line, int attrIDCount){
+        this.attrID = new ArrayList<Double>(attrIDCount); //initialize attr array
+        String[] data = line.split(",");
+        //split the input line into a string array
+        this.val = Double.parseDouble(data[0]); //populate class type and subsetID
+        this.subsetID = Integer.parseInt(data[1]);
+       
+        for (int i=0; i<attrIDCount; i++){ //populate attr with values.
+            this.attrID.add(Double.parseDouble(data[i+2])); }
+    }
+    
+    public Example(double val, ArrayList<Double> attrIDibutes){
+        this.attrID = attrIDibutes;
+        this.val = val;
+        this.subsetID = 0;
+    }
+}
+
+popinterface.java--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+package project4;
+
+public interface popinterface {
+    
+    public void train(Set training);
+    public MLP findBest();
+    
+}
+
+NeuralNet.java-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+package project4;
+public interface NeuralNet {
+    
+    public double[] test (Set testing_set);
+    public double predict(Example ex);
+    public Vector[] generateLayerOutputs(Example ex);
+    public Vector[] generateLayerDerivative();
+    public Layer returnLayer(int index);
+    public int[][] returnLayerDimensions();
+    
+}
+
+Activation Function.java----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+package project4;
+public interface ActivationFunction {
+    
+    public Vector computeActivation(Vector vector);
+    public Vector returnDerivative();
+    
+}
+
+Data Processor.py----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Logan Ladd and Asher Worley
+# Preproccesser to create two csv files, One with original data with s for 10 fold CV, very similar to prgm2
+
+import pandas as pandas
+import numpy as numpy
+import random
+import csv
+
+class data:
+    def __init__(self, classLocation, rm, missing, classify, file, split): #start data frame
+        dataFrame = pandas.DataFrame()
+        fileName = file #variables
+        s=[] #sets
+        b=[] #bins
+        i=0  #iterators
+        j=0
+        dataFrame=pandas.read_csv(file+'.data',skiprows=rm,sep=split,header=None) #read file
+ 
+        while j<len(dataFrame): #loop through file
+            s.append(i)
+            i+=1
+            if i>=10:
+                i=0
+            j+=1
+
+        dataFrame.rename(columns={classLocation: 'Class'}, inumpylace=True) #rename 
+        column = ['Class']
+        
+        newColumn = column + (dataFrame.columns.drop(column).tolist())
+        
+        dataFrame = dataFrame[newColumn]
+        
+        dataFrame = dataFrame.sample(frac=1).reset_index(drop=True) #randomize examples
+
+        columnFIX=['Class'] #rename Attr
+        for j in range(len(dataFrame.columns)-1):
+            columnFIX.append(j)
+        dataFrame.columns = columnFIX
+
+        if classify: #convert names to ints
+            tmp=(dataFrame.Class.unique())
+            tmp=numpy.sort(tmp)
+            for j in range(len(tmp)):
+                dataFrame['Class'] = dataFrame['Class'].replace(tmp[j], j)
+
+        else:
+            classB = dataFrame['Class'] #bin regression values
+            dataFrame['Class'] = pandas.cut(dataFrame['Class'], 10, labels=False)
+
+        dataFrame.insert(1, 's', s) #Assign s
+
+        cat=[] #convert cat varaiables to ints and index, also track attr for cat or numeric
+        catVarCount=0
+        
+        for j in range(len(dataFrame.columns)-2):
+            if dataFrame[j].dtype == object:
+                original = dataFrame[j].unique()
+                replace = dict(zip(original, range(len(original))))
+                dataFrame[j]=dataFrame[j].map(replace)
+                cat.append("0")
+                catVarCount += 1
+            else:
+                cat.append("1")
+        matrix = ''
+        
+        for j in range(len(cat)): # matrix for distance metric for cat variables
+            if cat[j]=='0':
+                matrix+=str(j)+','+str(len(dataFrame[j].unique()))+','+str(len(dataFrame.Class.unique()))+'\n'
+                for i in dataFrame[j].unique():
+                    for b in numpy.sort(dataFrame.Class.unique()):
+                        matrix += str(len(dataFrame[(dataFrame['Class']==b)&(dataFrame[j]==i)])/len(dataFrame[dataFrame['Class']==b]))+','
+                    matrix+='\n'
+
+            else:
+                if (dataFrame[j].max()==dataFrame[j].min()):
+                    dataFrame[j].values[:]=0
+                else:
+                    dataFrame[j]=dataFrame[j].apply(lambda x: (x-dataFrame[j].min())/(dataFrame[j].max()-dataFrame[j].min()))
+
+
+        if classify:
+            header=str(len(dataFrame.columns)-2)+','+str(len(dataFrame))+','+str(
+                dataFrame['Class'].nunique())+','+str(catVarCount)+'\n'+matrix+','.join(map(str, tmp))+','+'\n'
+        else:
+            dataFrame['Class']=classB
+            header = str(len(dataFrame.columns)-2)+','+str(len(dataFrame))+','+'-1'+','+ str(catVarCount)+'\n'+matrix
+        with open(fileName+'.csv','w') as fp:
+            fp.write(header)
+            fp.write((dataFrame.to_csv(index=False, header=False)))
+            fp.close
+
+
+Raw Output------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+DiFFEvolution
+
+breastcancer.csv, 0, 0.25, 1.5, 0.83, 118.50
+breastcancer.csv, 1, 0.25, 1.5, 0.79, 159.66
+breastcancer.csv, 2, 0.25, 1.5, 0.70, 903.76
+glass.csv, 0, 0.25, 1.5, 0.60, 8.11
+glass.csv, 1, 0.25, 1.5, 0.50, 9.09
+glass.csv, 2, 0.25, 1.5, 0.40, 14.91
+soybean.csv, 0, 0.5, 1.0, 0.72, 0.01
+soybean.csv, 1, 0.5, 1.0, 0.74, 0.01
+soybean.csv, 2, 0.5, 1.0, 0.76, -0.02
+abalone.csv, 0, 0.5, 1.5, 0.22, 1618.64
+abalone.csv, 1, 0.5, 1.5, 0.20, 2444.74
+abalone.csv, 2, 0.5, 1.5, 0.18, 2748.45
+machine.csv, 0, 0.5, 0.5, 0.77, 0.13
+machine.csv, 1, 0.5, 0.5, 0.59, 0.06
+machine.csv, 2, 0.5, 0.5, 1.01, 0.08
+forestfires.csv, 0, 0.25, 1.5, 1.90, 0.30
+forestfires.csv, 1, 0.25, 1.5, 1.90, 0.23
+forestfires.csv, 2, 0.25, 1.5, 2.14, 0.21
+
+PSO
+
+breastcancer.csv, 0, 2.0, 3.0, 0.86, 111.60
+breastcancer.csv, 1, 2.0, 3.0, 0.87, 93.40
+breastcancer.csv, 2, 2.0, 3.0, 0.90, 92.95
+glass.csv, 0, 2.0, 1.0, 0.68, 6.02
+glass.csv, 1, 2.0, 1.0, 0.62, 6.03
+glass.csv, 2, 2.0, 1.0, 0.67, 6.80
+soybean.csv, 0, 1.0, 2.0, 0.66, -0.05
+soybean.csv, 1, 1.0, 2.0, 0.66, -0.07
+soybean.csv, 2, 1.0, 2.0, 0.72, -0.13
+abalone.csv, 0, 3.0, 2.0, 0.22, 1778.29
+abalone.csv, 1, 3.0, 2.0, 0.21, 1808.33
+abalone.csv, 2, 3.0, 2.0, 0.22, 1974.31
+machine.csv, 0, 1.0, 3.0, 20.66, -0.26
+machine.csv, 1, 1.0, 3.0, 0.92, -0.23
+machine.csv, 2, 1.0, 3.0, 1.76, -0.19
+forestfires.csv, 0, 2.0, 2.0, 1.15, -0.33
+forestfires.csv, 1, 2.0, 2.0, 1.09, -0.32
+forestfires.csv, 2, 2.0, 2.0, 1.12, -0.34
+
+Genetic
+
+breastcancer.csv, 0, 0.1, 0.005, 0.86, 104.90
+breastcancer.csv, 1, 0.1, 0.005, 0.85, 206.00
+breastcancer.csv, 2, 0.1, 0.005, 0.70, 1074.00
+glass.csv, 0, 0.1, 0.05, 0.72, 3.91
+glass.csv, 1, 0.1, 0.05, 0.63, 6.20
+glass.csv, 2, 0.1, 0.05, 0.51, 13.55
+soybean.csv, 0, 0.1, 0.02, 0.67, -0.01
+soybean.csv, 1, 0.1, 0.02, 0.63, 0.00
+soybean.csv, 2, 0.1, 0.02, 0.0.00
+abalone.csv, 0, 0.1, 0.005, 0.22, 862.74
+abalone.csv, 1, 0.1, 0.005, 0.26, 967.06
+abalone.csv, 2, 0.1, 0.005, 0.21, 2122.44
+machine.csv, 0, 0.1, 0.02, 2.30, -0.04
+machine.csv, 1, 0.1, 0.02, 1.21, 0.19
+machine.csv, 2, 0.1, 0.02, 0.54, 0.00
+forestfires.csv, 0, 0.1, 0.05, 1.92, 0.30
+forestfires.csv, 1, 0.1, 0.05, 2.00, 0.28
+forestfires.csv, 2, 0.1, 0.05, 1.84, 0.25
